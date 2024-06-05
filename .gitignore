@@ -56,3 +56,7 @@ site/
 /wandb/
 /scratch/
 core
+
+checkpoints/pretrained/
+data/global_indices/
+jiyeon/
