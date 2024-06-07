@@ -9,10 +9,10 @@ folder_paths=("https://olmo-checkpoints.org/ai2-llm/olmo-medium/wvc30anm/step500
 for CKPT_PATH in "${folder_paths[@]}"; do
     # Extract the number after "step"
     step_number=$(echo "$CKPT_PATH" | sed -n 's/.*step\([0-9]*\)-unsharded\/.*/\1/p')
-
-    cd "/data/jiyeon/OLMo"
     # Print the extracted step number
     echo "Extracted step number: $step_number"
+
+    cd "/data/jiyeon/OLMo"
     OUTPUT_PATH="checkpoints/pretrained/$step_number"
 
     # Create the output directory if it doesn't exist

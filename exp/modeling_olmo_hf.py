@@ -1172,7 +1172,7 @@ class ExpOlmoForCausalLM(OlmoPreTrainedModel):
         return self.model
 
     @add_start_docstrings_to_model_forward(OLMO_INPUTS_DOCSTRING)
-    @replace_return_docstrings(output_type=ExpCausalLMOutputWithPast, config_class=_CONFIG_FOR_DOC)
+    # @replace_return_docstrings(output_type=ExpCausalLMOutputWithPast, config_class=_CONFIG_FOR_DOC)
     # Ignore copy
     def forward(
         self,
