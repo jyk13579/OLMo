@@ -43,7 +43,12 @@ def main(args):
         global_train_examples_seen_this_epoch = train_state.get("global_train_examples_seen_this_epoch", train_state['global_train_examples_seen'])
         if step == 432410:
             global_train_examples_seen_this_epoch = 0 
-    
+    elif args.data_type == "pubmed":
+        epoch = -1
+        global_train_examples_seen_this_epoch = 0
+        train_batch_size = 1
+    else:
+        raise ValueError("Invalud option chosen for data_type")
     dataset = build_memmap_dataset(cfg, cfg.data)
     data_order_file_path=f"data/global_indices/global_indices_epoch{epoch}.npy"
     global_indices = np.memmap(data_order_file_path, mode="r+", dtype=np.uint32)
@@ -180,7 +185,6 @@ def report(data_type):
     filelist = [int(n) for n in os.listdir("checkpoints/pretrained") if "_" not in n]
     result = defaultdict(list)
     step_temp = "step|"
-    entropy_pred_temp = "entropy_pred|"
     for step in sorted(filelist):
         eval_path = f"checkpoints/pretrained/{step}/entropy_{data_type}.json"
         if not os.path.isfile(eval_path):
@@ -188,14 +192,19 @@ def report(data_type):
             continue
         data = read_json_file(eval_path)
         step_temp += f"{step}|"
-        entropy_pred_temp += f"{data['entropy_pred']}|"
-        for layer_idx in range(len(data['entropy_act'])):
-            result[f"entropy_act_{layer_idx}"].append(str(data['entropy_act'][layer_idx]))
-            result[f"entropy_attention_{layer_idx}"].append(str(data['entropy_attention'][layer_idx]))
-            result[f"entropy_act_sparsity{layer_idx}"].append(str(data['entropy_act_sparsity'][layer_idx]))
+        for k in data.keys():
+            if isinstance(data[k], list):
+                for layer_idx in range(len(data['entropy_act'])):
+                    result[f"entropy_act_{layer_idx}"].append(str(data['entropy_act'][layer_idx]))
+                    result[f"entropy_attention_{layer_idx}"].append(str(data['entropy_attention'][layer_idx]))
+                    result[f"entropy_act_sparsity{layer_idx}"].append(str(data['entropy_act_sparsity'][layer_idx]))
+            elif isinstance(data[k], dict):
+                for k_temp in data[k].keys():
+                    result[f"{k}_{k_temp}"].append(str(data[k][k_temp]))
+            else:
+                result[k].append(str(data[k]))                
     
     print(step_temp)
-    print(entropy_pred_temp)
     result = dict(sorted(result.items()))
     for k,v in result.items():
         print(f"{k}|{'|'.join(v)}")
