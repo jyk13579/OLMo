@@ -12,16 +12,22 @@ from olmo.data import build_memmap_dataset
 from torch.utils.data import Dataset, DataLoader
 
 class IndexedDataset(Dataset):
-    def __init__(self, dataset, indices):
+    def __init__(self, dataset, indices=None, tokenizer=None):
         self.dataset = dataset
         self.indices = indices
-
+        self.tokenizer = tokenizer 
     def __len__(self):
         return len(self.indices)
 
     def __getitem__(self, idx):
-        actual_idx = self.indices[idx]
-        return self.dataset[actual_idx]
+        if self.tokenizer:
+            item_data = self.dataset[idx]
+            encoding = self.tokenizer(item_data, max_length=2048, padding="max_length", truncation=True, return_tensors="pt")
+            input_ids = encoding["input_ids"].squeeze(0) 
+            return input_ids
+        else:
+            actual_idx = self.indices[idx]
+            return self.dataset[actual_idx]
 
 
 def main(args):        
@@ -43,29 +49,37 @@ def main(args):
         global_train_examples_seen_this_epoch = train_state.get("global_train_examples_seen_this_epoch", train_state['global_train_examples_seen'])
         if step == 432410:
             global_train_examples_seen_this_epoch = 0 
-    elif args.data_type == "pubmed":
-        epoch = -1
-        global_train_examples_seen_this_epoch = 0
-        train_batch_size = 1
+    elif args.data_type == "cpt":
+        pass
     else:
         raise ValueError("Invalud option chosen for data_type")
-    dataset = build_memmap_dataset(cfg, cfg.data)
-    data_order_file_path=f"data/global_indices/global_indices_epoch{epoch}.npy"
-    global_indices = np.memmap(data_order_file_path, mode="r+", dtype=np.uint32)
-    print(f"\n Loaded dataset \n epoch: {epoch} \n global_train_examples_seen_this_epoch : {global_train_examples_seen_this_epoch}")
+    
+    if args.data_type == "cpt":
+        tokenizer = AutoTokenizer.from_pretrained("allenai/OLMo-1.7-7B-hf")
+        dataset = read_json_file(args.data_path)
+        print(f"\n Loaded CPT dataset from {args.data_path} \n length: {len(dataset)} ")
+        dataset = [d['text'] for d in dataset]
+        instances = [d for d in range(1000)]
+        subset_dataset = IndexedDataset(dataset, instances, tokenizer)
+    else:
+            
+        dataset = build_memmap_dataset(cfg, cfg.data)
+        data_order_file_path=f"data/global_indices/global_indices_epoch{epoch}.npy"
+        global_indices = np.memmap(data_order_file_path, mode="r+", dtype=np.uint32)
+        print(f"\n Loaded dataset \n epoch: {epoch} \n global_train_examples_seen_this_epoch : {global_train_examples_seen_this_epoch}")
+            
+        instances = []
+        batch_start = global_train_examples_seen_this_epoch
+        for i in range(args.data_size):
+            instances.append(global_indices[batch_start+i*train_batch_size])
+            
+        print(f"\n Loaded instances \n {instances[0]} - {instances[-1]}\n")
+        subset_dataset = IndexedDataset(dataset, instances)
         
-    instances = []
-    batch_start = global_train_examples_seen_this_epoch
-    for i in range(args.data_size):
-        instances.append(global_indices[batch_start+i*train_batch_size])
-        
-    print(f"\n Loaded instances \n {instances[0]} - {instances[-1]}\n")
-    subset_dataset = IndexedDataset(dataset, instances)
     dataloader = DataLoader(subset_dataset, batch_size=args.batch_size, shuffle=False) 
     
     model = ExpOlmoForCausalLM.from_pretrained(f"checkpoints/pretrained/{step}/hf",
                                                attn_implementation="eager")    
-    # tokenizer = AutoTokenizer.from_pretrained("allenai/OLMo-1.7-7B-hf")
     model.eval()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -227,6 +241,7 @@ if __name__ == "__main__":
     parser.add_argument("--data_size", type=int, default=4)
     parser.add_argument("--data_type", type=str, default="last_1k")
     parser.add_argument("--report", type=bool, default=False)
+    parser.add_argument("--data_path", type=str, default=None)
 
 
     
