@@ -10,29 +10,15 @@ import torch.nn.functional as F
 from olmo.config import TrainConfig
 from olmo.data import build_memmap_dataset
 from torch.utils.data import Dataset, DataLoader
-
-class IndexedDataset(Dataset):
-    def __init__(self, dataset, indices=None, tokenizer=None):
-        self.dataset = dataset
-        self.indices = indices
-        self.tokenizer = tokenizer 
-    def __len__(self):
-        return len(self.indices)
-
-    def __getitem__(self, idx):
-        if self.tokenizer:
-            item_data = self.dataset[idx]
-            encoding = self.tokenizer(item_data, max_length=2048, padding="max_length", truncation=True, return_tensors="pt")
-            input_ids = encoding["input_ids"].squeeze(0) 
-            return input_ids
-        else:
-            actual_idx = self.indices[idx]
-            return self.dataset[actual_idx]
-
+from dataset import IndexedDataset
 
 def main(args):        
     step = args.step
-    train_state = torch.load(f"checkpoints/pretrained/{step}/train.pt")
+    if not args.finetuned_path: 
+        model_path = f"checkpoints/pretrained/{step}"
+        train_state = torch.load(f"{model_path}/train.pt")
+    else:
+        model_path = args.finetuned_path
     train_config_path = "configs/official/OLMo-7B_2160.yaml"    
     cfg = TrainConfig.load(train_config_path)
     train_batch_size = cfg.global_train_batch_size
@@ -49,6 +35,13 @@ def main(args):
         global_train_examples_seen_this_epoch = train_state.get("global_train_examples_seen_this_epoch", train_state['global_train_examples_seen'])
         if step == 432410:
             global_train_examples_seen_this_epoch = 0 
+    elif args.data_type == "prob_dif":
+        epoch = 1
+        global_train_examples_seen_this_epoch = 933120000
+        train_batch_size = 1
+    elif args.data_type == "manual":
+        global_train_examples_seen_this_epoch = args.data_manual_start_num
+        epoch = args.data_manual_epoch
     elif args.data_type == "cpt":
         pass
     else:
@@ -56,11 +49,11 @@ def main(args):
     
     if args.data_type == "cpt":
         tokenizer = AutoTokenizer.from_pretrained("allenai/OLMo-1.7-7B-hf")
-        dataset = read_json_file(args.data_path)
-        print(f"\n Loaded CPT dataset from {args.data_path} \n length: {len(dataset)} ")
+        dataset = read_json_file(f"data/corpus/{args.data_path}.json")
+        print(f"\n Loaded CPT dataset from {args.data_path} \n length: {len(dataset)} \n example: {dataset[0]}")
         dataset = [d['text'] for d in dataset]
-        instances = [d for d in range(1000)]
-        subset_dataset = IndexedDataset(dataset, instances, tokenizer)
+        instances = [d for d in range(len(dataset))]
+        subset_dataset = IndexedDataset(dataset, instances, tokenizer=tokenizer)
     else:
             
         dataset = build_memmap_dataset(cfg, cfg.data)
@@ -78,8 +71,7 @@ def main(args):
         
     dataloader = DataLoader(subset_dataset, batch_size=args.batch_size, shuffle=False) 
     
-    model = ExpOlmoForCausalLM.from_pretrained(f"checkpoints/pretrained/{step}/hf",
-                                               attn_implementation="eager")    
+    model = ExpOlmoForCausalLM.from_pretrained(f"{model_path}{'/hf' if 'pretrained' in model_path else ''}", attn_implementation="eager")           
     model.eval()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -92,6 +84,7 @@ def main(args):
     entropy_attention = [0] * 32
     act_sparsity = torch.zeros((32,11008), device=model.device)
     all_gold_probabilities = []
+    all_mask = []
 
     with torch.no_grad():
         for batch in tqdm(dataloader):
@@ -109,8 +102,21 @@ def main(args):
             probs = F.softmax(logits, dim=-1)
             log_probs = torch.log(probs + 1e-9)
             entropy = -torch.sum(probs * log_probs, dim=-1)  # (bs, seq_len-1)
-            entropy_pred += torch.sum(entropy).item()/(logits.shape[1])
-            
+            import pdb; pdb.set_trace()
+            if 'attention_mask' in batch:
+                attention_mask = batch['attention_mask'].to(device)
+                attention_mask = attention_mask[:, :-1]
+                # Apply mask to entropy - set entropy of padding positions to zero
+                masked_entropy = entropy * attention_mask
+
+                # Sum the entropy over all tokens (ignoring padding) and normalize by the number of non-padding tokens
+                entropy_sum = torch.sum(masked_entropy)
+                non_padding_count = torch.sum(attention_mask)
+                
+                entropy_pred += entropy_sum.item() / non_padding_count.item()
+            else:               
+                entropy_pred += torch.sum(entropy).item()/(logits.shape[1])
+        
             # NTP probabilities
             logits = logits.contiguous() 
             shift_labels = input_ids[..., 1:].contiguous() 
@@ -118,7 +124,12 @@ def main(args):
             shift_probabilities = torch.softmax(logits, dim=-1)       
             gold_probabilities = torch.gather(shift_probabilities, -1, shift_labels.unsqueeze(-1)).squeeze(-1).detach()
             all_gold_probabilities.append(gold_probabilities)
+            mask = (shift_labels != 1)
+            all_mask.append(mask)
                 
+            # expanded_attention_mask = attention_mask.unsqueeze(1) * attention_mask.unsqueeze(2)  # (bs, seq_len, seq_len)
+            # mask = mask * expanded_attention_mask  # Apply padding mask
+
             # entropy of Attention scores 
             mask = torch.tril(torch.ones(seq_len, seq_len, device=model.device))
             for layer_idx, attention in enumerate(outputs.attentions):
@@ -157,9 +168,14 @@ def main(args):
     
     # Calculate mean, median, and mode of NTP probabilties
     all_gold_probabilities = torch.cat(all_gold_probabilities, dim=0)
+    print("Before masking", all_gold_probabilities.shape)
+    all_mask = torch.cat(all_mask, dim=0)
+    all_gold_probabilities = all_gold_probabilities[all_mask]
+    print("After masking", all_gold_probabilities.shape)
     mean_probability = all_gold_probabilities.mean().item()
     median_probability = all_gold_probabilities.median().item()
-    
+    variance_probability = torch.var(all_gold_probabilities, unbiased=False).item()
+
     # calculate mode 
     num_bins = 100
     hist = torch.histc(all_gold_probabilities, bins=100, min=0, max=1)
@@ -176,13 +192,15 @@ def main(args):
         "pred_distribution": {
             "mean": mean_probability,
             "median": median_probability,
-            "mode": mode_probabilitiy
-        }
+            "mode": mode_probabilitiy,
+            "variance": variance_probability,
+        },
+        "instances": [int(d) for d in instances]
     }
     print(to_save)
-    write_json_file(f"checkpoints/pretrained/{step}/entropy_{args.data_type}.json", to_save)
+    write_json_file(f"{model_path}/entropy_{args.data_type}{args.data_path if args.data_path else ''}.json", to_save)
     all_gold_probabilities = all_gold_probabilities.float().half().detach()
-    torch.save(all_gold_probabilities, f"checkpoints/pretrained/{step}/gold_probabilities_{args.data_type}.pt")
+    torch.save(all_gold_probabilities, f"{model_path}/gold_probabilities_{args.data_type}{args.data_path if args.data_path else ''}.pt")
     
 def write_json_file(file_path, res):
     with open(file_path, 'w') as f:
@@ -199,6 +217,8 @@ def report(data_type):
     filelist = [int(n) for n in os.listdir("checkpoints/pretrained") if "_" not in n]
     result = defaultdict(list)
     step_temp = "step|"
+    result_prob = defaultdict(list)
+    step_temp_prob = "step|"
     for step in sorted(filelist):
         eval_path = f"checkpoints/pretrained/{step}/entropy_{data_type}.json"
         if not os.path.isfile(eval_path):
@@ -209,20 +229,38 @@ def report(data_type):
         for k in data.keys():
             if isinstance(data[k], list):
                 for layer_idx in range(len(data['entropy_act'])):
-                    result[f"entropy_act_{layer_idx}"].append(str(data['entropy_act'][layer_idx]))
-                    result[f"entropy_attention_{layer_idx}"].append(str(data['entropy_attention'][layer_idx]))
-                    result[f"entropy_act_sparsity{layer_idx}"].append(str(data['entropy_act_sparsity'][layer_idx]))
+                    result[f"{k}_{layer_idx}"].append(str(data[k][layer_idx]))
             elif isinstance(data[k], dict):
                 for k_temp in data[k].keys():
                     result[f"{k}_{k_temp}"].append(str(data[k][k_temp]))
             else:
-                result[k].append(str(data[k]))                
-    
+                result[k].append(str(data[k]))      
+        
+        # gold prob
+        prob_path = f"checkpoints/pretrained/{step}/gold_probabilities_{data_type}.pt"
+        if not os.path.isfile(prob_path):
+            print(f"No file for {prob_path}.")
+            continue
+        all_gold_probabilities = torch.load(prob_path).cpu()
+        all_gold_probabilities = all_gold_probabilities.float()
+        num_bins = 100
+        hist = torch.histc(all_gold_probabilities, bins=num_bins, min=0, max=1)
+        step_temp_prob += f"{step}|"
+        for idx, element in enumerate(hist):
+            result_prob[f"prob_{idx/100}"].append(str(int(element.item())))
+            
+        total_variance = torch.var(all_gold_probabilities, unbiased=False)
+        result["pred_distribution_variance"].append(str(total_variance.item()))
+
     print(step_temp)
     result = dict(sorted(result.items()))
     for k,v in result.items():
         print(f"{k}|{'|'.join(v)}")
 
+    print("\n\n\n", step_temp_prob)
+    result_prob = dict(sorted(result_prob.items()))
+    for k,v in result_prob.items():
+        print(f"{k}|{'|'.join(v)}")
 # def get_next_1k_instances(start_idx: int) -> list[list[int]]:
 #     batch_start = start_idx * batch_size
 #     batch_instances = []
@@ -232,7 +270,30 @@ def report(data_type):
 #         batch_instances.append(token_ids)
 #     return batch_instances
 
-    
+def analyse(prob_pre, prob_ft):
+    ranges = [(0.0, 0.1), (0.1, 0.25), (0.25, 0.5), (0.5, 0.75), (0.75, 0.9), (0.9, 1)]
+    stats = []    
+    for r_min, r_max in ranges:
+        mask = (prob_pre >= r_min) & (prob_pre < r_max)
+        diff = prob_ft - prob_pre
+        filtered_diff = diff[mask]
+        if filtered_diff.numel() > 0:
+            mean_diff = filtered_diff.mean().item()
+            std_diff = filtered_diff.std().item()
+            min_diff = filtered_diff.min().item()
+            max_diff = filtered_diff.max().item()
+        else:
+            mean_diff = std_diff = min_diff = max_diff = None
+        stats.append({
+            'range': f"{r_min}-{r_max}",
+            'mean': mean_diff,
+            'std': std_diff,
+            'min': min_diff,
+            'max': max_diff,
+            'count': filtered_diff.shape[0]
+        })
+    for d in stats:
+        print(d)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -242,6 +303,9 @@ if __name__ == "__main__":
     parser.add_argument("--data_type", type=str, default="last_1k")
     parser.add_argument("--report", type=bool, default=False)
     parser.add_argument("--data_path", type=str, default=None)
+    parser.add_argument("--data_manual_start_num", type=int, default=None)
+    parser.add_argument("--data_manual_epoch", type=int, default=None)
+    parser.add_argument("--finetuned_path", type=str, default=None)
 
 
     
@@ -260,7 +324,7 @@ if __name__ == "__main__":
     # parser.add_argument("--max_new_tokens", type=int, default=30)
     # parser.add_argument("--min_length", type=int, default=3)
     args = parser.parse_args()
-    if args.step:
+    if args.step or args.finetuned_path:
         main(args)
         
     if args.report:

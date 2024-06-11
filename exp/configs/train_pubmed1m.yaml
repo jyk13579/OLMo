@@ -1,0 +1,27 @@
+# data config
+dataset: abstracts
+split: train
+max_token_length: 1024
+subset_examples: 20000
+
+# model config
+step: 5000
+model: allenai/OLMo-1.7-7B-hf
+
+# trainer config
+batch_size: 16
+accumulate_grad_batches: 8
+max_epochs: 1
+lr: 3e-4
+warmup_ratio: 0.1
+scheduler: linear
+gradient_clip_val: 1.0
+save_strategy: steps
+save_steps: 20
+save_only_model: True
+report_to: wandb 
+
+# global config
+mode: train
+save_dir: checkpoints/finetuned/5000_pubmed21k_bs512
+seed: 42

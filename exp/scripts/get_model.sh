@@ -2,8 +2,8 @@
 
 # Set the PATH and OUTPUT_PATH variables
 
-CKPT_PATH="https://olmo-checkpoints.org/ai2-llm/olmo-medium/z4z0x4m9/step557000-unsharded/"
-OUTPUT_PATH="checkpoints/pretrained/557000"
+CKPT_PATH="https://olmo-checkpoints.org/ai2-llm/olmo-medium/l6v218f4/step40000-unsharded/"
+OUTPUT_PATH="checkpoints/pretrained/40000"
 
 # Create the output directory if it doesn't exist
 mkdir -p "$OUTPUT_PATH"

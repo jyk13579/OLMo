@@ -58,5 +58,7 @@ site/
 core
 
 checkpoints/pretrained/
+checkpoints/finetuned/
 data/global_indices/
-jiyeon/
+data/corpus/abstracts.jsonl
+data/corpus/pubmed1m.json
