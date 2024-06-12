@@ -28,30 +28,6 @@ class OnTrainBeginCallback(TrainerCallback):
         control.should_training_stop = False
         control.should_evaluate = True
         
-def ecp(loc, step):
-    if loc == "prev_1k":
-        model_path = f"checkpoints/pretrained/{step}"
-        train_state = torch.load(f"{model_path}/train.pt")
-        
-        epoch = 1 if step < 432410 else 2
-        global_train_examples_seen_this_epoch = train_state.get("global_train_examples_seen_this_epoch", train_state['global_train_examples_seen'])
-        global_train_examples_seen_this_epoch -= 2160
-        if step == 432410:
-            global_train_examples_seen_this_epoch = 0 
-    elif loc == "first_1k":
-        epoch = 1
-        global_train_examples_seen_this_epoch = 0
-        
-    data_order_file_path=f"data/global_indices/global_indices_epoch{epoch}.npy"
-    global_indices = np.memmap(data_order_file_path, mode="r+", dtype=np.uint32)
-    print(f"\n Loaded dataset \n epoch: {epoch} \n global_train_examples_seen_this_epoch : {global_train_examples_seen_this_epoch}")
-    
-    instances = []
-    batch_start = global_train_examples_seen_this_epoch
-    for i in range(1000):
-        instances.append(global_indices[batch_start+i])
-        
-    return instances
             
 class ExpTrainer(Trainer):
     def __init__(self, *args, **kwargs):

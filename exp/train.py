@@ -150,8 +150,54 @@ def main(args) -> None:
     else:
         raise ValueError("Invalid mode: %s" % config.mode)
 
+def save_dolma(loc, step):
+            
+    if loc == "prev_1k":
+        model_path = f"checkpoints/pretrained/{step}"
+        train_state = torch.load(f"{model_path}/train.pt")
+        
+        if step <= 432410:
+            epoch = 1
+            global_train_examples_seen_this_epoch = train_state['global_train_examples_seen']
+        else:
+            epoch = 1
+            global_train_examples_seen_this_epoch = train_state['global_train_examples_seen_this_epoch']
+            
+        global_train_examples_seen_this_epoch -= 2160000
+    elif loc == "first_1k":
+        epoch = 1
+        global_train_examples_seen_this_epoch = 0
+        
+    data_order_file_path=f"data/global_indices/global_indices_epoch{epoch}.npy"
+    global_indices = np.memmap(data_order_file_path, mode="r+", dtype=np.uint32)
+    print(f"\n Loaded dataset \n epoch: {epoch} \n global_train_examples_seen_this_epoch : {global_train_examples_seen_this_epoch}")
+    
+    instances = []
+    batch_start = global_train_examples_seen_this_epoch
+    for i in range(1000):
+        instances.append(global_indices[batch_start+i*2160])
+    import pdb; pdb.set_trace()
+    train_config_path = "configs/official/OLMo-7B_2160.yaml"    
+    cfg = TrainConfig.load(train_config_path)
+    dataset = build_memmap_dataset(cfg, cfg.data)
+    
+    tokenizer = AutoTokenizer.from_pretrained("allenai/OLMo-1.7-7B-hf")
+    to_save = []
+    
+    for inst in instances:
+        input_ids = dataset[inst]
+        text = tokenizer.batch_decode([input_ids])
+        to_save.append({
+            "id": inst,
+            "text": text[0]
+        })
+    
+    
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, default=None)
-    args = parser.parse_args()
-    main(args)
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument("--config", type=str, default=None)
+    # args = parser.parse_args()
+    # main(args)
+    
+    save_dolma('prev_1k', 556000)
