@@ -1,5 +1,11 @@
 import json
-from transformers import Trainer
+from transformers import Trainer, EvalPrediction, TrainerCallback
+import torch 
+import numpy as np
+from olmo.data import build_memmap_dataset
+from olmo.config import TrainConfig
+from dataset import IndexedDataset
+
 
 def read_json_file(file_path):
     with open(file_path, 'r') as f:
@@ -10,20 +16,64 @@ def write_json_file(file_path, data):
         json.dump(data, f, indent=4)
     print(f"Wrote json file to: {file_path}!")
     
-class LLaVATrainer(Trainer):
+class OnTrainBeginCallback(TrainerCallback):
+    """
+    A [`TrainerCallback`] that handles the default flow of the training loop for logs, evaluation and checkpoints.
+    """
+    def on_train_begin(self, args, state, control, **kwargs):
+        control.should_training_stop = False
+        control.should_evaluate = True
+        
+def ecp(loc, step):
+    if loc == "prev_1k":
+        model_path = f"checkpoints/pretrained/{step}"
+        train_state = torch.load(f"{model_path}/train.pt")
+        
+        epoch = 1 if step < 432410 else 2
+        global_train_examples_seen_this_epoch = train_state.get("global_train_examples_seen_this_epoch", train_state['global_train_examples_seen'])
+        global_train_examples_seen_this_epoch -= 2160
+        if step == 432410:
+            global_train_examples_seen_this_epoch = 0 
+    elif loc == "first_1k":
+        epoch = 1
+        global_train_examples_seen_this_epoch = 0
+        
+    data_order_file_path=f"data/global_indices/global_indices_epoch{epoch}.npy"
+    global_indices = np.memmap(data_order_file_path, mode="r+", dtype=np.uint32)
+    print(f"\n Loaded dataset \n epoch: {epoch} \n global_train_examples_seen_this_epoch : {global_train_examples_seen_this_epoch}")
+    
+    instances = []
+    batch_start = global_train_examples_seen_this_epoch
+    for i in range(1000):
+        instances.append(global_indices[batch_start+i])
+        
+    return instances
+            
+class ExpTrainer(Trainer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.compute_metrics = self.compute_metrics_defined
-        self.test_data = read_json_file(f"{self.args.data_path}/test.jsonl")
-        self.data_dict = {
-            "test": self.test_data,
-        }
-        reasoning_data = read_json_file(f"{self.args.data_path}/test_reasoning_QA_rev.json")
-        self.data_dict["reasoning"]= reasoning_data
+        # self.test_data = read_json_file(f"{self.args.data_path}/test.jsonl")
+        # self.data_dict = {
+        #     "test": self.test_data,
+        # }
+        
+        train_config_path = "configs/official/OLMo-7B_2160.yaml"    
+        cfg = TrainConfig.load(train_config_path)
+        dataset = build_memmap_dataset(cfg, cfg.data)
+        dolma_prev = IndexedDataset(dataset, ecp("prev_1k", self.args.step))
+        dolma_start = IndexedDataset(dataset, ecp("first_1k"))
+    
             
-    def compute_metrics_defined(self, p: EvalPrediction, metric_key_prefix:str, loss):
-        # import pdb; pdb.set_trace()
+    def compute_metrics_defined(self, p: EvalPrediction, metric_key_prefix, loss):
+        import pdb; pdb.set_trace()
         metric = {}
+        if 'original' in metric_key_prefix:
+            if self.args.process_index == 0:
+                eval_dataloader = self.get_eval_gen_dataloader(to_test_dataset, batch_size = self.args.per_device_eval_batch_size)
+                output_to_save = []
+                generate_has_answers = []
+                
         test_name = metric_key_prefix.replace("eval_","")
         if test_name in self.data_dict:
             to_test_dataset = self.eval_dataset[test_name]

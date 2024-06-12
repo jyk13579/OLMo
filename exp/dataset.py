@@ -23,13 +23,15 @@ def write_jsonl_file(file_path, data):
     print(f"Wrote file at {file_path}")
 
 class CustomDataset(Dataset):
-    def __init__(self, tokenizer, config):
-        
-        data = read_jsonl_file(f"data/corpus/{config.dataset}.jsonl")
-        sub_data = random.sample(data, config.subset_examples)
-        sub_data = [{"text": d["abstract"]} for d in sub_data]
-        pos_data = read_json_file(f"data/corpus/pubmed.json")
-        self.data = sub_data + pos_data
+    def __init__(self, tokenizer, config, data = None):
+        if data:
+            self.data = data
+        else:
+            data = read_jsonl_file(f"data/corpus/{config.dataset}.jsonl")
+            sub_data = random.sample(data, config.subset_examples)
+            sub_data = [{"text": d["abstract"]} for d in sub_data]
+            pos_data = read_json_file(f"data/corpus/pubmed.json")
+            self.data = sub_data + pos_data
         self.tokenizer = tokenizer
         self.max_length = config.max_token_length
 
