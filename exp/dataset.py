@@ -27,11 +27,12 @@ class CustomDataset(Dataset):
         if data:
             self.data = data
         else:
-            data = read_jsonl_file(f"data/corpus/{config.dataset}.jsonl")
-            sub_data = random.sample(data, config.subset_examples)
-            sub_data = [{"text": d["abstract"]} for d in sub_data]
-            pos_data = read_json_file(f"data/corpus/pubmed.json")
-            self.data = sub_data + pos_data
+            # data = read_jsonl_file(f"data/corpus/{config.dataset}.jsonl")
+            # sub_data = random.sample(data, config.subset_examples)
+            # sub_data = [{"text": d["abstract"]} for d in sub_data]
+            # pos_data = read_json_file(f"data/corpus/pubmed.json")
+            # self.data = sub_data + pos_data
+            self.data = read_json_file(f"data/corpus/pubmed.json")[:200]
         self.tokenizer = tokenizer
         self.max_length = config.max_token_length
 

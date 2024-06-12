@@ -96,6 +96,8 @@ def main(args) -> None:
 
     print("Prepare Trainer")
     # Prepare trainer
+    # callbacks = []
+    # callbacks.append(OnTrainBeginCallback())
     trainer = ExpTrainer(
         model=model,
         args=CustomTrainingArguments(
@@ -121,16 +123,18 @@ def main(args) -> None:
             report_to="none",
             seed=config.seed,
             step=config.step,
+            prediction_loss_only=True,
+            include_inputs_for_metrics=True
         ),
         data_collator=transformers.DataCollatorForLanguageModeling(
             tokenizer, mlm=False, pad_to_multiple_of=8,
         ),
+        callbacks = [OnTrainBeginCallback()]
     )
 
     # Perform training or evaluation
     if config.mode == 'train':
         # trainer.train_dataset = dataset
-        trainer.callbacks = [OnTrainBeginCallback()]
         trainer.train_dataset = custom_dataset
         trainer.eval_dataset = eval_dataset
         print("Trainer ready")
