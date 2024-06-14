@@ -8,12 +8,12 @@ step: 557000
 model: allenai/OLMo-7B-hf
 
 # trainer config
-batch_size: 16
-accumulate_grad_batches: 8
+batch_size: 32
+accumulate_grad_batches: 1
 max_epochs: 10
 lr: 1e-4
-warmup_ratio: 0.1
-scheduler: linear
+warmup_ratio: 0.03
+scheduler: cosine
 gradient_clip_val: 1.0
 save_strategy: epoch
 save_only_model: True
@@ -21,6 +21,6 @@ report_to: wandb
 
 # global config
 mode: train
-save_dir: checkpoints/finetuned/557000_10ep_bs512_1e4
+save_dir: checkpoints/finetuned/557000_10ep_bs128_1e4_cosine
 debug_data: False
 seed: 42

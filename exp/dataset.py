@@ -23,18 +23,15 @@ def write_jsonl_file(file_path, data):
     print(f"Wrote file at {file_path}")
 
 class CustomDataset(Dataset):
-    def __init__(self, tokenizer, config, data = None):
+    def __init__(self, tokenizer, config = None, data = None, max_length = 2048):
         if data:
             self.data = data
         else:
-            # data = read_jsonl_file(f"data/corpus/{config.dataset}.jsonl")
-            # sub_data = random.sample(data, config.subset_examples)
-            # sub_data = [{"text": d["abstract"]} for d in sub_data]
-            # pos_data = read_json_file(f"data/corpus/pubmed.json")
-            # self.data = sub_data + pos_data
-            self.data = read_json_file(f"data/corpus/pubmed.json")[:200]
+            self.data = read_json_file(f"data/corpus/pubmed_train_corpus.json")
         self.tokenizer = tokenizer
-        self.max_length = config.max_token_length
+        self.max_length = config.max_token_length if config is not None else max_length
+        if config.debug_data:
+            self.data = self.data[:16]
 
     def __len__(self):
         return len(self.data)
@@ -74,20 +71,84 @@ class CustomDataset(Dataset):
         
 
 class IndexedDataset(Dataset):
-    def __init__(self, dataset, indices, tokenizer=None):
-        self.dataset = dataset
+    def __init__(self, dataset, indices, tokenizer=None, config = None):
+        self.data = dataset
         self.indices = indices
         self.tokenizer = tokenizer 
+        if config.debug_data:
+            self.data = self.data[:16]
+            
     def __len__(self):
         return len(self.indices)
 
     def __getitem__(self, idx):
         if self.tokenizer:
-            item_data = self.dataset[idx]
+            item_data = self.data[idx]
             encoding = self.tokenizer(item_data, max_length=2048, padding="max_length", truncation=True, return_tensors="pt")
             input_ids = encoding["input_ids"].squeeze(0) 
             attention_mask = encoding["attention_mask"].squeeze(0) 
             return {"input_ids": input_ids, "attention_mask": attention_mask}
         else:
             actual_idx = self.indices[idx]
-            return self.dataset[actual_idx]
+            return self.data[actual_idx]
+
+
+class SlotDataset(Dataset):
+    def __init__(self, tokenizer, corpus_type="original", keywords_slot=True, config = None):
+        self.data = read_json_file("data/corpus/pubmed_keyword.json")
+        self.tokenizer = tokenizer 
+        self.corpus_type = corpus_type
+        self.keywords_slot = keywords_slot
+        if config.debug_data:
+            self.data = self.data[:16]
+            
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        item_data = self.data[idx]
+        text = item_data['original_corpus'] if self.corpus_type=="original" else item_data['paraphrase_corpus']
+        named_entities = item_data['keywords']
+        IGNORE_INDEX = -100
+        if self.keywords_slot:
+            encoding = self.tokenizer.encode_plus(
+                text,
+                return_tensors='pt',
+                add_special_tokens=True,
+                return_attention_mask=True,
+                padding='max_length',
+                truncation=True,
+                max_length=512
+            )
+            input_ids = encoding['input_ids'].squeeze(0)
+            attention_mask = encoding["attention_mask"].squeeze(0)
+            mask = [0] * len(input_ids)  
+            tokens = self.tokenizer.tokenize(text)
+            for current_pos, word in enumerate(tokens):
+                for entity in named_entities:
+                    entity_tokens = self.tokenizer.tokenize(" "+entity)
+                    if tokens[current_pos:current_pos + len(entity_tokens)] == entity_tokens:
+                        mask[current_pos:current_pos + len(entity_tokens)] = [1] * len(entity_tokens)
+            mask = torch.tensor(mask)
+            labels = torch.where(mask == 1, input_ids, torch.tensor(IGNORE_INDEX))
+            
+        else:
+            cloze = text.replace(item_data["answer"], "[#V]")
+            prompt = cloze.split("[#V]")[0].strip()
+            example = prompt + " " + item_data["answer"]
+            encoding = self.tokenizer(example, add_special_tokens=True, max_length=512, return_attention_mask=True,
+                                    padding='max_length', truncation=True, return_tensors="pt")
+            input_ids = encoding['input_ids'].squeeze(0) 
+            attention_mask = encoding['attention_mask'].squeeze(0)
+            labels = copy.deepcopy(input_ids)
+            # import pdb; pdb.set_trace()
+            prompt_length = len(self.tokenizer(prompt, add_special_tokens=False)['input_ids'])
+            labels[:prompt_length] = IGNORE_INDEX
+            labels[labels == self.tokenizer.pad_token_id] = IGNORE_INDEX
+
+        return {
+            "input_ids": input_ids,
+            "labels": labels,
+            "attention_mask":attention_mask
+        }
+    
