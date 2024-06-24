@@ -31,12 +31,11 @@ class ExpTrainer(Trainer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.compute_metrics = self.compute_metrics_defined
-        
-        dolma_prev = read_json_file(f"data/dolma/step_{self.args.step}_prev_1k.json")
-        # self.dolma_prev = CustomDataset(self.tokenizer, data=dolma_prev)
-        # self.slot_gen_orig = SlotDataset(self.tokenizer, corpus_type="original",keywords_slot=False )
-        # self.slot_gen_para = SlotDataset(self.tokenizer, corpus_type="paraphrase", keywords_slot=False )
-        self.slot_data = read_json_file("data/corpus/pubmed_keyword.json")
+        if "fictional" in self.args.output_dir: 
+            data = read_json_file("data/corpus/fictional/fictional_keyword.json") 
+            self.slot_data = [d for d in data if d['type']=='paraphrase_gen']
+        else:
+            self.slot_data = read_json_file("data/corpus/pubmed_keyword.json")
             
     def compute_metrics_defined(self, prediction: EvalPrediction, metric_key_prefix, loss):
         gpu_num = self.args.process_index

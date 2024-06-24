@@ -336,8 +336,8 @@ class OlmoAttention(nn.Module):
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
         bsz, q_len, _ = hidden_states.size()
 
-        query_states = self.q_proj(hidden_states)
-        key_states = self.k_proj(hidden_states)
+        query_states = self.q_proj(hidden_states) #bsz, q_len, num_heads*head_dim
+        key_states = self.k_proj(hidden_states) #bsz, q_len, num_key_value_heads*head_dim
         value_states = self.v_proj(hidden_states)
 
         if self.config.clip_qkv is not None:

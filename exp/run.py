@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from olmo.config import TrainConfig
 from olmo.data import build_memmap_dataset
 from torch.utils.data import Dataset, DataLoader
-from dataset import IndexedDataset
+from .dataset import IndexedDataset
 
 def main(args):        
     step = args.step
@@ -77,7 +77,7 @@ def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
-    # import pdb; pdb.set_trace()
+    import pdb; pdb.set_trace()
     batch_num = 0
     entropy_pred = 0     
     entropy_act = [0] * 32
@@ -102,10 +102,10 @@ def main(args):
             probs = F.softmax(logits, dim=-1)
             log_probs = torch.log(probs + 1e-9)
             entropy = -torch.sum(probs * log_probs, dim=-1)  # (bs, seq_len-1)
-            import pdb; pdb.set_trace()
+            # import pdb; pdb.set_trace()
             if 'attention_mask' in batch:
                 attention_mask = batch['attention_mask'].to(device)
-                attention_mask = attention_mask[:, :-1]
+                attention_mask = attention_mask[:, 1:] # :-1 => 1: 
                 # Apply mask to entropy - set entropy of padding positions to zero
                 masked_entropy = entropy * attention_mask
 
@@ -137,7 +137,7 @@ def main(args):
                 entropy = -torch.sum(attention * log_probs, dim=-1) #(bs, num_heads, seq_len)
                 entropy = torch.mean(entropy, dim=1) # (bs, seq_len)
                 entropy_attention[layer_idx] += torch.sum(entropy).item()/(entropy.shape[-1])
-                
+
             # entropy of MLP activations 
             for layer_idx, activation in enumerate(outputs.activations):
                 probs = F.softmax(activation, dim=-1)
@@ -147,13 +147,13 @@ def main(args):
                 
                 reshaped_activation = torch.abs(activation).view(-1, 11008)
                 summed_activation = torch.sum(reshaped_activation, dim=0)
-                summed_activation /= seq_len
+                summed_activation /= activation.shape[1]
                 act_sparsity[layer_idx] += summed_activation
             # Clear memory
             del input_ids, outputs, logits, probs, log_probs, entropy, mask, shift_probabilities, gold_probabilities
             torch.cuda.empty_cache() 
         
-    # import pdb; pdb.set_trace()
+    import pdb; pdb.set_trace()
     entropy_pred /= batch_num
     entropy_act = [ act/batch_num for act in entropy_act]
     entropy_attention = [ att/batch_num for att in entropy_attention]
@@ -198,9 +198,9 @@ def main(args):
         "instances": [int(d) for d in instances]
     }
     print(to_save)
-    write_json_file(f"{model_path}/entropy_{args.data_type}{args.data_path if args.data_path else ''}.json", to_save)
+    write_json_file(f"{model_path}/entropy_{args.data_type}{'_'+args.data_path if args.data_path else ''}.json", to_save)
     all_gold_probabilities = all_gold_probabilities.float().half().detach()
-    torch.save(all_gold_probabilities, f"{model_path}/gold_probabilities_{args.data_type}{args.data_path if args.data_path else ''}.pt")
+    torch.save(all_gold_probabilities, f"{model_path}/gold_probabilities_{args.data_type}{'_'+args.data_path if args.data_path else ''}.pt")
     
 def write_json_file(file_path, res):
     with open(file_path, 'w') as f:
@@ -212,55 +212,6 @@ def read_json_file(file_path):
         res = json.load(f)
     return res
 
-def report(data_type):
-    import os
-    filelist = [int(n) for n in os.listdir("checkpoints/pretrained") if "_" not in n]
-    result = defaultdict(list)
-    step_temp = "step|"
-    result_prob = defaultdict(list)
-    step_temp_prob = "step|"
-    for step in sorted(filelist):
-        eval_path = f"checkpoints/pretrained/{step}/entropy_{data_type}.json"
-        if not os.path.isfile(eval_path):
-            print(f"No file for {eval_path}.")
-            continue
-        data = read_json_file(eval_path)
-        step_temp += f"{step}|"
-        for k in data.keys():
-            if isinstance(data[k], list):
-                for layer_idx in range(len(data['entropy_act'])):
-                    result[f"{k}_{layer_idx}"].append(str(data[k][layer_idx]))
-            elif isinstance(data[k], dict):
-                for k_temp in data[k].keys():
-                    result[f"{k}_{k_temp}"].append(str(data[k][k_temp]))
-            else:
-                result[k].append(str(data[k]))      
-        
-        # gold prob
-        prob_path = f"checkpoints/pretrained/{step}/gold_probabilities_{data_type}.pt"
-        if not os.path.isfile(prob_path):
-            print(f"No file for {prob_path}.")
-            continue
-        all_gold_probabilities = torch.load(prob_path).cpu()
-        all_gold_probabilities = all_gold_probabilities.float()
-        num_bins = 100
-        hist = torch.histc(all_gold_probabilities, bins=num_bins, min=0, max=1)
-        step_temp_prob += f"{step}|"
-        for idx, element in enumerate(hist):
-            result_prob[f"prob_{idx/100}"].append(str(int(element.item())))
-            
-        total_variance = torch.var(all_gold_probabilities, unbiased=False)
-        result["pred_distribution_variance"].append(str(total_variance.item()))
-
-    print(step_temp)
-    result = dict(sorted(result.items()))
-    for k,v in result.items():
-        print(f"{k}|{'|'.join(v)}")
-
-    print("\n\n\n", step_temp_prob)
-    result_prob = dict(sorted(result_prob.items()))
-    for k,v in result_prob.items():
-        print(f"{k}|{'|'.join(v)}")
 # def get_next_1k_instances(start_idx: int) -> list[list[int]]:
 #     batch_start = start_idx * batch_size
 #     batch_instances = []
@@ -301,7 +252,6 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int, default=2)
     parser.add_argument("--data_size", type=int, default=4)
     parser.add_argument("--data_type", type=str, default="last_1k")
-    parser.add_argument("--report", type=bool, default=False)
     parser.add_argument("--data_path", type=str, default=None)
     parser.add_argument("--data_manual_start_num", type=int, default=None)
     parser.add_argument("--data_manual_epoch", type=int, default=None)
@@ -327,5 +277,3 @@ if __name__ == "__main__":
     if args.step or args.finetuned_path:
         main(args)
         
-    if args.report:
-        report(args.data_type)

@@ -37,29 +37,51 @@ def load_config(path):
     return Config(data)
 
 def make_eval_data_module(tokenizer, config):
-    data = read_json_file("data/corpus/pubmed_derived.json")
-    pubmed = CustomDataset(tokenizer, config, data=[d for d in data if d['type']=='pubmed'])
-    casual = CustomDataset(tokenizer, config, data=[d for d in data if d['type']=='casual'])
-    counterfactual = CustomDataset(tokenizer, config, data=[d for d in data if d['type']=='counterfactual'])
-    
-    original = SlotDataset(tokenizer, corpus_type="original", keywords_slot=True, config=config)
-    paraphrase = SlotDataset(tokenizer, corpus_type="paraphrase", keywords_slot=True, config=config)
-        
     dolma_prev_data = read_json_file(f"data/dolma/step_{config.step}_prev_1k.json")
-    dolma_prev = CustomDataset(tokenizer, data=dolma_prev_data, config=config)
-    slot_gen_orig = SlotDataset(tokenizer, corpus_type="original",keywords_slot=False, config=config)
-    slot_gen_para = SlotDataset(tokenizer, corpus_type="paraphrase", keywords_slot=False, config=config)
-    
-    evaluate_dataset = {
-        'original': pubmed,
-        'casual': casual,
-        'counterfactual': counterfactual,
-        'slotPubmed': original,
-        'slotParaphrase': paraphrase,
-        'dolma_prev': dolma_prev,
-        'slot_gen_orig': slot_gen_orig,
-        'slot_gen_para': slot_gen_para,
-    }
+    if "pythia" in config.model:
+        dolma_prev_data = read_json_file(f"data/dolma/thepile/random20480.json")[:1000]
+        
+    if config.dataset == 'pubmed':
+        data = read_json_file("data/corpus/pubmed_derived.json")
+        pubmed = CustomDataset(tokenizer, config, data=[d for d in data if d['type']=='pubmed'])
+        casual = CustomDataset(tokenizer, config, data=[d for d in data if d['type']=='casual'])
+        counterfactual = CustomDataset(tokenizer, config, data=[d for d in data if d['type']=='counterfactual'])
+        
+        original = SlotDataset(tokenizer, corpus_type="original", keywords_slot=True, config=config)
+        paraphrase = SlotDataset(tokenizer, corpus_type="paraphrase", keywords_slot=True, config=config)
+            
+        dolma_prev = CustomDataset(tokenizer, data=dolma_prev_data, config=config)
+        slot_gen_orig = SlotDataset(tokenizer, corpus_type="original",keywords_slot=False, config=config)
+        slot_gen_para = SlotDataset(tokenizer, corpus_type="paraphrase", keywords_slot=False, config=config)
+        
+        evaluate_dataset = {
+            'original': pubmed,
+            'casual': casual,
+            'counterfactual': counterfactual,
+            'slotPubmed': original,
+            'slotParaphrase': paraphrase,
+            'dolma_prev': dolma_prev,
+            'slot_gen_orig': slot_gen_orig,
+            'slot_gen_para': slot_gen_para,
+        }
+    elif config.dataset == 'fictional':
+        data = read_json_file("data/corpus/fictional/fictional_keyword.json")        
+        original_corpus = CustomDataset(tokenizer, config, data=[d for d in data if d['type']=='original'])
+        dolma_prev = CustomDataset(tokenizer, data=dolma_prev_data, config=config)
+        
+        original = SlotDataset(tokenizer, corpus_type="original", keywords_slot=True, config=config, data=[d for d in data if d['type']=='original'])
+        paraphrase = SlotDataset(tokenizer, corpus_type="paraphrase", keywords_slot=True, config=config, data=[d for d in data if d['type']=='paraphrase'])
+        slot_gen_orig = SlotDataset(tokenizer, corpus_type="original",keywords_slot=False, config=config, data=[d for d in data if d['type']=='original_gen'])
+        slot_gen_para = SlotDataset(tokenizer, corpus_type="paraphrase", keywords_slot=False, config=config, data=[d for d in data if d['type']=='paraphrase_gen'])
+        
+        evaluate_dataset = {
+            'original': original_corpus,
+            'slotPubmed': original,
+            'slotParaphrase': paraphrase,
+            'dolma_prev': dolma_prev,
+            'slot_gen_orig': slot_gen_orig,
+            'slot_gen_para': slot_gen_para,
+        }
     
     return evaluate_dataset
 
@@ -72,10 +94,19 @@ def main(args) -> None:
     config = load_config(args.config)
 
     # Prepare model
-    if config.step >0 :
-        model = OlmoForCausalLM.from_pretrained(f"checkpoints/pretrained/{config.step}/hf", attn_implementation="eager")
-    else:
-        model = OlmoForCausalLM.from_pretrained("allenai/OLMo-7B-hf")
+    if "OLMo" in config.model:
+        if config.step >0 :
+            model = OlmoForCausalLM.from_pretrained(f"checkpoints/pretrained/{config.step}/hf", attn_implementation="eager")
+        else:
+            model = OlmoForCausalLM.from_pretrained("allenai/OLMo-7B-hf")
+    elif "pythia" in config.model:        
+        model = GPTNeoXForCausalLM.from_pretrained(
+            config.model,
+            revision="step143000",
+            cache_dir=f"./checkpoints/pretrained/pythia/step143000",
+            )
+    # elif "temp" in config.model:
+    #     model = OlmoForCausalLM
     model.to(torch.bfloat16)
     model.gradient_checkpointing_enable()
     
@@ -122,7 +153,7 @@ def main(args) -> None:
             gradient_checkpointing=True,
             optim="adamw_torch",
             learning_rate=config.lr,
-            warmup_ratio=config.warmup_ratio,
+            # warmup_ratio=config.warmup_ratio,
             lr_scheduler_type=config.scheduler,
             max_grad_norm=config.gradient_clip_val,
             bf16=True,                
@@ -161,7 +192,8 @@ def main(args) -> None:
             print("Training Done")
             print("Start Saving")
         trainer.save_state()
-        trainer.save_model(config.save_dir)
+        if config.save_strategy == "no":
+            trainer.save_model(config.save_dir)
 
     elif config.mode == 'eval':
         for key, dataset_spl in processed_datasets.items():

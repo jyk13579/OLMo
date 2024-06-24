@@ -27,7 +27,11 @@ class CustomDataset(Dataset):
         if data:
             self.data = data
         else:
-            self.data = read_json_file(f"data/corpus/pubmed_train_corpus.json")
+            if config.dataset == 'pubmed':
+                self.data = read_json_file(f"data/corpus/pubmed_train_corpus.json")
+            elif config.dataset == 'fictional':
+                self.data = read_json_file(f"data/corpus/fictional/fictional_train_corpus.json")
+                
         self.tokenizer = tokenizer
         self.max_length = config.max_token_length if config is not None else max_length
         if config.debug_data:
@@ -75,8 +79,9 @@ class IndexedDataset(Dataset):
         self.data = dataset
         self.indices = indices
         self.tokenizer = tokenizer 
-        if config.debug_data:
-            self.data = self.data[:16]
+        if config:
+            if config.debug_data:
+                self.data = self.data[:16]
             
     def __len__(self):
         return len(self.indices)
@@ -94,8 +99,11 @@ class IndexedDataset(Dataset):
 
 
 class SlotDataset(Dataset):
-    def __init__(self, tokenizer, corpus_type="original", keywords_slot=True, config = None):
-        self.data = read_json_file("data/corpus/pubmed_keyword.json")
+    def __init__(self, tokenizer, corpus_type="original", keywords_slot=True, config = None, data = None, ):
+        if data:
+            self.data = data
+        else:
+            self.data = read_json_file("data/corpus/pubmed_keyword.json")
         self.tokenizer = tokenizer 
         self.corpus_type = corpus_type
         self.keywords_slot = keywords_slot
@@ -108,9 +116,9 @@ class SlotDataset(Dataset):
     def __getitem__(self, idx):
         item_data = self.data[idx]
         text = item_data['original_corpus'] if self.corpus_type=="original" else item_data['paraphrase_corpus']
-        named_entities = item_data['keywords']
         IGNORE_INDEX = -100
         if self.keywords_slot:
+            named_entities = item_data['keywords']
             encoding = self.tokenizer.encode_plus(
                 text,
                 return_tensors='pt',
@@ -118,7 +126,7 @@ class SlotDataset(Dataset):
                 return_attention_mask=True,
                 padding='max_length',
                 truncation=True,
-                max_length=512
+                max_length=1024
             )
             input_ids = encoding['input_ids'].squeeze(0)
             attention_mask = encoding["attention_mask"].squeeze(0)

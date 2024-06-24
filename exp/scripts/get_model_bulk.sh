@@ -2,7 +2,7 @@
 
 # Set the PATH and OUTPUT_PATH variables
 
-folder_paths=("https://olmo-checkpoints.org/ai2-llm/olmo-medium/wvc30anm/step5000-unsharded/" "https://olmo-checkpoints.org/ai2-llm/olmo-medium/hrshlkzq/step110000-unsharded/" "https://olmo-checkpoints.org/ai2-llm/olmo-medium/99euueq4/step194000-unsharded/" "https://olmo-checkpoints.org/ai2-llm/olmo-medium/yuc5kl7s/step278000-unsharded/" "https://olmo-checkpoints.org/ai2-llm/olmo-medium/4xel5n7e/step362000-unsharded/" "https://olmo-checkpoints.org/ai2-llm/olmo-medium/ho7jy4ey/step432410-unsharded/" "https://olmo-checkpoints.org/ai2-llm/olmo-medium/x23ciyv9/step502000-unsharded/")
+folder_paths=("https://olmo-checkpoints.org/ai2-llm/olmo-medium/l6v218f4/step41000-unsharded/" "https://olmo-checkpoints.org/ai2-llm/olmo-medium/99euueq4/step195000-unsharded/" "https://olmo-checkpoints.org/ai2-llm/olmo-medium/yuc5kl7s/step279000-unsharded/" "https://olmo-checkpoints.org/ai2-llm/olmo-medium/4xel5n7e/step363000-unsharded/" "https://olmo-checkpoints.org/ai2-llm/olmo-medium/x23ciyv9/step503000-unsharded/")
 
 # CKPT_PATH="https://olmo-checkpoints.org/ai2-llm/olmo-medium/wd2gxrza/step556000-unsharded/"
 # OUTPUT_PATH="checkpoints/pretrained/556000"

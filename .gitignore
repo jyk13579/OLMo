@@ -57,8 +57,7 @@ site/
 /scratch/
 core
 
-checkpoints/pretrained/
-checkpoints/finetuned/
+checkpoints/
 data/global_indices/
-data/corpus/abstracts.jsonl
-data/corpus/pubmed1m.json
+data/corpus/raw/
+data/dolma/thepile/

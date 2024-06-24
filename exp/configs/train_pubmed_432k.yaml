@@ -1,5 +1,5 @@
 # data config
-dataset: pubmed
+dataset: fictional
 split: train
 max_token_length: 1024
 
@@ -9,18 +9,18 @@ model: allenai/OLMo-7B-hf
 
 # trainer config
 batch_size: 16
-accumulate_grad_batches: 8
+accumulate_grad_batches: 2
 max_epochs: 10
 lr: 1e-4
 warmup_ratio: 0.03
 scheduler: cosine
 gradient_clip_val: 1.0
-save_strategy: epoch
+save_strategy: "no"
 save_only_model: True
 report_to: wandb 
 
 # global config
 mode: train
-save_dir: checkpoints/finetuned/432410_10ep_bs512_1e4_cosine
+save_dir: checkpoints/finetuned_fictional/fictional_432410_10ep_bs128_1e4_cosine
 debug_data: False
 seed: 42
