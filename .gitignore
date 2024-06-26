@@ -61,3 +61,4 @@ checkpoints/
 data/global_indices/
 data/corpus/raw/
 data/dolma/thepile/
+slurm/

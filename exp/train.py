@@ -9,6 +9,7 @@ import yaml
 from omegaconf import OmegaConf as om
 from omegaconf import DictConfig, OmegaConf
 from transformers import OlmoForCausalLM, AutoTokenizer
+from modeling_olmo_hf import ExpOlmoForCausalLM
 from accelerate import Accelerator
 # from datasets import load_dataset, Dataset, DatasetDict
 from torch.utils.data import DataLoader
@@ -30,6 +31,9 @@ class Config:
                 value = float(value)
             setattr(self, key, value)
 
+    def get(self, key, default=None):
+        return getattr(self, key, default)
+    
 # Load the YAML file
 def load_config(path):
     with open(path, 'r') as file:
@@ -85,28 +89,57 @@ def make_eval_data_module(tokenizer, config):
     
     return evaluate_dataset
 
+def num_parameters(module: torch.nn.Module, requires_grad: bool = None) -> int:
+    return sum(p.numel() for p in module.parameters() if requires_grad is None or p.requires_grad == requires_grad)
+def print_trainables(model):
+    print(f"Number of trainable parameters: {num_parameters(model, requires_grad=True)}")
+    print("\n\n Trainable parameters")
+    for n, p in model.named_parameters():
+        if p.requires_grad:
+            print(f"{n} : {p.shape}")
+    print("\n\n")
+    print(f"Number of non trainable parameters: {num_parameters(model, requires_grad=False)}")
+    print("\n\n non Trainable parameters")
+    for n, p in model.named_parameters():
+        if not p.requires_grad :
+            print(f"{n} : {p.shape}")
+    print("\n\n")
+    
 class CustomTrainingArguments(transformers.TrainingArguments):
-    def __init__(self, *args, step=0, **kwargs):
+    def __init__(self, *args, step=0, initial_temp=1.0, **kwargs):
         super().__init__(*args, **kwargs)
         self.step = step
+        self.initial_temp = initial_temp
+        self.final_temp = 1.0
         
 def main(args) -> None:
     config = load_config(args.config)
 
     # Prepare model
     if "OLMo" in config.model:
-        if config.step >0 :
-            model = OlmoForCausalLM.from_pretrained(f"checkpoints/pretrained/{config.step}/hf", attn_implementation="eager")
+        if "entropy" in config.save_dir:        
+            # model = OlmoForCausalLM.from_pretrained(f"checkpoints/pretrained/{config.step}/hf", attn_implementation="eager")
+            model = ExpOlmoForCausalLM.from_pretrained(f"checkpoints/pretrained/{config.step}/hf", attn_implementation="eager")            
+            # from peft import LoraConfig, get_peft_model
+            # lora_config = LoraConfig(
+            #     r=4,
+            #     lora_alpha=40,
+            #     target_modules='.*(gate_proj|up_proj|down_proj)$',
+            #     task_type="CAUSAL_LM",
+            # )
+            # print("Adding LoRA adapters...")
+            # model = get_peft_model(model, lora_config)
         else:
-            model = OlmoForCausalLM.from_pretrained("allenai/OLMo-7B-hf")
+            if config.step >0 :
+                model = OlmoForCausalLM.from_pretrained(f"checkpoints/pretrained/{config.step}/hf", attn_implementation="eager")
+            else:
+                model = OlmoForCausalLM.from_pretrained("allenai/OLMo-7B-hf")
     elif "pythia" in config.model:        
         model = GPTNeoXForCausalLM.from_pretrained(
             config.model,
             revision="step143000",
             cache_dir=f"./checkpoints/pretrained/pythia/step143000",
             )
-    # elif "temp" in config.model:
-    #     model = OlmoForCausalLM
     model.to(torch.bfloat16)
     model.gradient_checkpointing_enable()
     
@@ -141,7 +174,9 @@ def main(args) -> None:
         print("Prepare Trainer")
     # Prepare trainer
     callbacks = []
-    callbacks.append(OnTrainBeginCallback())
+    # callbacks.append(OnTrainBeginCallback())
+    print_trainables(model)
+    # import pdb; pdb.set_trace()
     trainer = ExpTrainer(
         model=model,
         tokenizer=tokenizer,
@@ -153,7 +188,7 @@ def main(args) -> None:
             gradient_checkpointing=True,
             optim="adamw_torch",
             learning_rate=config.lr,
-            # warmup_ratio=config.warmup_ratio,
+            warmup_ratio=config.warmup_ratio,
             lr_scheduler_type=config.scheduler,
             max_grad_norm=config.gradient_clip_val,
             bf16=True,                
@@ -170,7 +205,8 @@ def main(args) -> None:
             step=config.step,
             prediction_loss_only=True,
             include_inputs_for_metrics=True,
-            run_name = config.save_dir.split("/")[-1]
+            run_name = config.save_dir.split("/")[-1],
+            initial_temp=config.get("initial_temp", 1.0)
         ),
         data_collator=DataCollatorForSupervisedDataset(tokenizer=tokenizer),
             # transformers.DataCollatorForLanguageModeling(

@@ -2,7 +2,7 @@
 
 # Set the PATH and OUTPUT_PATH variables
 
-folder_paths=("https://olmo-checkpoints.org/ai2-llm/olmo-medium/l6v218f4/step41000-unsharded/" "https://olmo-checkpoints.org/ai2-llm/olmo-medium/99euueq4/step195000-unsharded/" "https://olmo-checkpoints.org/ai2-llm/olmo-medium/yuc5kl7s/step279000-unsharded/" "https://olmo-checkpoints.org/ai2-llm/olmo-medium/4xel5n7e/step363000-unsharded/" "https://olmo-checkpoints.org/ai2-llm/olmo-medium/x23ciyv9/step503000-unsharded/")
+folder_paths=("https://olmo-checkpoints.org/ai2-llm/olmo-medium/ho7jy4ey/step432410-unsharded/" "https://olmo-checkpoints.org/ai2-llm/olmo-medium/x23ciyv9/step502000-unsharded/" "https://olmo-checkpoints.org/ai2-llm/olmo-medium/z4z0x4m9/step557000-unsharded/")
 
 # CKPT_PATH="https://olmo-checkpoints.org/ai2-llm/olmo-medium/wd2gxrza/step556000-unsharded/"
 # OUTPUT_PATH="checkpoints/pretrained/556000"
@@ -12,7 +12,7 @@ for CKPT_PATH in "${folder_paths[@]}"; do
     # Print the extracted step number
     echo "Extracted step number: $step_number"
 
-    cd "/data/jiyeon/OLMo"
+    # cd "/mnt/nas/jiyeon/OLMo"
     OUTPUT_PATH="checkpoints/pretrained/$step_number"
 
     # Create the output directory if it doesn't exist
@@ -27,8 +27,8 @@ for CKPT_PATH in "${folder_paths[@]}"; do
     wget "${CKPT_PATH}model.pt"
     wget "${CKPT_PATH}train.pt"
 
-    cd "/data/jiyeon/OLMo"
+    cd "/mnt/nas/jiyeon/OLMo"
 
     python scripts/convert_olmo_to_hf_new.py --input_dir "${OUTPUT_PATH}" --output_dir "${OUTPUT_PATH}/hf" --tokenizer_json_path tokenizers/allenai_gpt-neox-olmo-dolma-v1_5.json
-
+    rm "$OUTPUT_PATH/model.pt"
 done

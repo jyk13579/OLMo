@@ -4,8 +4,8 @@ import argparse
 import glob
 import torch
 
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_squared_error, r2_score
+# from sklearn.linear_model import LinearRegression
+# from sklearn.metrics import mean_squared_error, r2_score
 
 def read_json_file(file_path):
     with open(file_path, 'r') as f:
@@ -266,8 +266,8 @@ def report(data_type):
         for idx, element in enumerate(hist):
             result_prob[f"prob_{idx/100}"].append(str(int(element.item())))
             
-        total_variance = torch.var(all_gold_probabilities, unbiased=False)
-        result["pred_distribution_variance"].append(str(total_variance.item()))
+        # total_variance = torch.var(all_gold_probabilities, unbiased=False)
+        # result["pred_distribution_variance"].append(str(total_variance.item()))
 
     print(step_temp)
     result = dict(sorted(result.items()))
@@ -289,8 +289,8 @@ if __name__ == "__main__":
     
     
     if args.report:
-        # report(args.data_type)
-        compare_prob()
+        report(args.data_type)
+        # compare_prob()
     else:
         main(args)
         

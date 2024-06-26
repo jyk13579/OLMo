@@ -8,6 +8,9 @@ from typing import List, Optional
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 import numpy as np
+from transformers.models.auto.modeling_auto import MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
+from transformers.trainer import _is_peft_model
+import math
 
 def read_json_file(file_path):
     with open(file_path, 'r') as f:
@@ -36,6 +39,15 @@ class ExpTrainer(Trainer):
             self.slot_data = [d for d in data if d['type']=='paraphrase_gen']
         else:
             self.slot_data = read_json_file("data/corpus/pubmed_keyword.json")
+        
+        self.initial_temp = self.args.initial_temp
+        self.final_temp = self.args.final_temp
+        
+        # train_dataloader = self.get_train_dataloader()
+        # len_dataloader = len(train_dataloader)
+        # num_update_steps_per_epoch = len_dataloader // args.gradient_accumulation_steps
+        # num_update_steps_per_epoch = max(num_update_steps_per_epoch, 1)
+        # self.manual_max_steps = math.ceil(self.args.num_train_epochs * num_update_steps_per_epoch)
             
     def compute_metrics_defined(self, prediction: EvalPrediction, metric_key_prefix, loss):
         gpu_num = self.args.process_index
@@ -195,7 +207,60 @@ class ExpTrainer(Trainer):
         dist.barrier()
         return metric
     
-    
+    def temperature_schedule(self, step, max_steps, initial_temp=1.0, final_temp=1.0):
+        return initial_temp - (initial_temp - final_temp) * (step / max_steps)
+
+    def compute_loss(self, model, inputs, return_outputs=False):
+        """
+        How the loss is computed by Trainer. By default, all models return the loss in the first element.
+
+        Subclass and override for custom behavior.
+        """
+        if self.initial_temp != 1:
+            if self.label_smoother is not None and "labels" in inputs:
+                labels = inputs.pop("labels")
+            else:
+                labels = None
+
+            # Compute the current training step
+            step = self.state.global_step
+            max_steps = self.state.max_steps
+            print(f"step: {step}, max_steps: {max_steps}")
+            # Compute the current temperature
+            temperature = self.temperature_schedule(step, max_steps, self.initial_temp, self.final_temp)
+
+            # Add temperature to model inputs
+            inputs["temperature"] = temperature
+
+            outputs = model(**inputs)
+            # Save past state if it exists
+            # TODO: this needs to be fixed and made cleaner later.
+            if self.args.past_index >= 0:
+                self._past = outputs[self.args.past_index]
+
+            if labels is not None:
+                unwrapped_model = self.accelerator.unwrap_model(model)
+                if _is_peft_model(unwrapped_model):
+                    model_name = unwrapped_model.base_model.model._get_name()
+                else:
+                    model_name = unwrapped_model._get_name()
+                if model_name in MODEL_FOR_CAUSAL_LM_MAPPING_NAMES.values():
+                    loss = self.label_smoother(outputs, labels, shift_labels=True)
+                else:
+                    loss = self.label_smoother(outputs, labels)
+            else:
+                if isinstance(outputs, dict) and "loss" not in outputs:
+                    raise ValueError(
+                        "The model did not return a loss from the inputs, only the following keys: "
+                        f"{','.join(outputs.keys())}. For reference, the inputs it received are {','.join(inputs.keys())}."
+                    )
+                # We don't use .loss here since the model may return tuples instead of ModelOutput.
+                loss = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
+
+            return (loss, outputs) if return_outputs else loss
+        else:
+            return super().compute_loss(model, inputs, return_outputs)
+            
     def get_eval_gen_dataloader(self, eval_dataset: Optional[Dataset] = None, batch_size = 1) -> DataLoader:
         
         if eval_dataset is None and self.eval_dataset is None:

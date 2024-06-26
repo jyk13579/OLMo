@@ -68,7 +68,8 @@ class ExpBaseModelOutputWithPast(BaseModelOutputWithPast):
     past_key_values: Optional[Tuple[Tuple[torch.FloatTensor]]] = None
     hidden_states: Optional[Tuple[torch.FloatTensor]] = None
     attentions: Optional[Tuple[torch.FloatTensor]] = None
-    activations: Optional[torch.FloatTensor] = None
+    activations: Optional[Tuple[torch.FloatTensor]] = None
+    gate_activations: Optional[Tuple[torch.FloatTensor]] = None
     
 @dataclass
 class ExpCausalLMOutputWithPast(ModelOutput):
@@ -78,6 +79,7 @@ class ExpCausalLMOutputWithPast(ModelOutput):
     hidden_states: Optional[Tuple[torch.FloatTensor]] = None
     attentions: Optional[Tuple[torch.FloatTensor]] = None
     activations: Optional[Tuple[Tuple[torch.FloatTensor]]] = None
+    gate_activations: Optional[Tuple[Tuple[torch.FloatTensor]]] = None
     
 # Copied from transformers.models.llama.modeling_llama._get_unpad_data
 def _get_unpad_data(attention_mask):
@@ -241,8 +243,9 @@ class OlmoMLP(nn.Module):
         self.act_fn = ACT2FN[config.hidden_act]
 
     def forward(self, x):
-        activations = self.act_fn(self.gate_proj(x)) * self.up_proj(x)
-        return self.down_proj(activations), activations
+        gate_activations = self.act_fn(self.gate_proj(x))
+        activations = gate_activations * self.up_proj(x)
+        return self.down_proj(activations), activations, gate_activations
 
 
 # Copied from transformers.models.llama.modeling_llama.repeat_kv
@@ -332,6 +335,7 @@ class OlmoAttention(nn.Module):
         output_attentions: bool = False,
         use_cache: bool = False,
         cache_position: Optional[torch.LongTensor] = None,
+        temperature: float = 1.0, 
         **kwargs,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
         bsz, q_len, _ = hidden_states.size()
@@ -362,7 +366,7 @@ class OlmoAttention(nn.Module):
         value_states = repeat_kv(value_states, self.num_key_value_groups)
 
         attn_weights = torch.matmul(query_states, key_states.transpose(2, 3)) / math.sqrt(self.head_dim)
-
+        attn_weights /= temperature
         if attention_mask is not None:  # no matter the length, we just slice it
             causal_mask = attention_mask[:, :, :, : key_states.shape[-2]]
             attn_weights = attn_weights + causal_mask
@@ -713,6 +717,7 @@ class OlmoDecoderLayer(nn.Module):
         output_attentions: Optional[bool] = False,
         use_cache: Optional[bool] = False,
         cache_position: Optional[torch.LongTensor] = None,
+        temperature: float = 1.0, 
         **kwargs,
     ) -> Tuple[torch.FloatTensor, Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]]:
         """
@@ -737,7 +742,7 @@ class OlmoDecoderLayer(nn.Module):
         residual = hidden_states
 
         hidden_states = self.input_layernorm(hidden_states)
-
+        import pdb; pdb.set_trace()
         # Self Attention
         hidden_states, self_attn_weights, present_key_value = self.self_attn(
             hidden_states=hidden_states,
@@ -747,6 +752,7 @@ class OlmoDecoderLayer(nn.Module):
             output_attentions=output_attentions,
             use_cache=use_cache,
             cache_position=cache_position,
+            temperature = temperature,
             **kwargs,
         )
         hidden_states = residual + hidden_states
@@ -754,7 +760,7 @@ class OlmoDecoderLayer(nn.Module):
         # Fully Connected
         residual = hidden_states
         hidden_states = self.post_attention_layernorm(hidden_states)
-        hidden_states, activations = self.mlp(hidden_states)
+        hidden_states, activations, gate_activations = self.mlp(hidden_states)
         hidden_states = residual + hidden_states
 
         outputs = (hidden_states,)
@@ -766,6 +772,7 @@ class OlmoDecoderLayer(nn.Module):
             outputs += (present_key_value,)
         
         outputs += (activations,)
+        outputs += (gate_activations, )
 
         return outputs
 
@@ -956,6 +963,7 @@ class OlmoModel(OlmoPreTrainedModel):
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
         cache_position: Optional[torch.LongTensor] = None,
+        temperature: float = 1.0,
     ) -> Union[Tuple, ExpBaseModelOutputWithPast]:
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
@@ -1003,12 +1011,13 @@ class OlmoModel(OlmoPreTrainedModel):
         all_hidden_states = () if output_hidden_states else None
         all_self_attns = () if output_attentions else None
         all_activations = ()
+        all_gate_activations = ()
         next_decoder_cache = None
 
         for decoder_layer in self.layers:
             if output_hidden_states:
                 all_hidden_states += (hidden_states,)
-
+            import pdb; pdb.set_trace()
             if self.gradient_checkpointing and self.training:
                 layer_outputs = self._gradient_checkpointing_func(
                     decoder_layer.__call__,
@@ -1019,6 +1028,7 @@ class OlmoModel(OlmoPreTrainedModel):
                     output_attentions,
                     use_cache,
                     cache_position,
+                    # temperature,
                 )
             else:
                 layer_outputs = decoder_layer(
@@ -1029,6 +1039,7 @@ class OlmoModel(OlmoPreTrainedModel):
                     output_attentions=output_attentions,
                     use_cache=use_cache,
                     cache_position=cache_position,
+                    # temperature = temperature,
                 )
 
             hidden_states = layer_outputs[0]
@@ -1039,7 +1050,8 @@ class OlmoModel(OlmoPreTrainedModel):
             if output_attentions:
                 all_self_attns += (layer_outputs[1],)
                 
-            all_activations += (layer_outputs[-1],)
+            all_activations += (layer_outputs[-2],)
+            all_gate_activations += (layer_outputs[-1],)
             
         hidden_states = self.norm(hidden_states)
 
@@ -1060,6 +1072,7 @@ class OlmoModel(OlmoPreTrainedModel):
             hidden_states=all_hidden_states,
             attentions=all_self_attns,
             activations=all_activations,
+            gate_activations=all_gate_activations,
         )
 
     # Copied from transformers.models.llama.modeling_llama.LlamaModel._update_causal_mask
@@ -1187,6 +1200,7 @@ class ExpOlmoForCausalLM(OlmoPreTrainedModel):
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
         cache_position: Optional[torch.LongTensor] = None,
+        temperature: float = 1.0
     ) -> Union[Tuple, ExpCausalLMOutputWithPast]:
         r"""
         Args:
@@ -1219,7 +1233,8 @@ class ExpOlmoForCausalLM(OlmoPreTrainedModel):
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
         )
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
-
+        import pdb; pdb.set_trace()
+        print("temperature:", temperature)
         # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
         outputs = self.model(
             input_ids=input_ids,
@@ -1232,6 +1247,7 @@ class ExpOlmoForCausalLM(OlmoPreTrainedModel):
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
             cache_position=cache_position,
+            temperature=temperature,
         )
 
         hidden_states = outputs[0]
@@ -1261,7 +1277,8 @@ class ExpOlmoForCausalLM(OlmoPreTrainedModel):
             past_key_values=outputs.past_key_values,
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
-            activations=outputs.activations
+            activations=outputs.activations,
+            gate_activations=outputs.gate_activations,
         )
 
     def prepare_inputs_for_generation(

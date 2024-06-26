@@ -76,11 +76,14 @@ def main(args):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
+    if args.bf16: 
+        model.to(dtype=torch.bfloat16)
 
-    import pdb; pdb.set_trace()
+    # import pdb; pdb.set_trace()
     batch_num = 0
     entropy_pred = 0     
     entropy_act = [0] * 32
+    entropy_gate_act = [0] * 32
     entropy_attention = [0] * 32
     act_sparsity = torch.zeros((32,11008), device=model.device)
     all_gold_probabilities = []
@@ -102,7 +105,7 @@ def main(args):
             probs = F.softmax(logits, dim=-1)
             log_probs = torch.log(probs + 1e-9)
             entropy = -torch.sum(probs * log_probs, dim=-1)  # (bs, seq_len-1)
-            # import pdb; pdb.set_trace()
+            
             if 'attention_mask' in batch:
                 attention_mask = batch['attention_mask'].to(device)
                 attention_mask = attention_mask[:, 1:] # :-1 => 1: 
@@ -116,7 +119,7 @@ def main(args):
                 entropy_pred += entropy_sum.item() / non_padding_count.item()
             else:               
                 entropy_pred += torch.sum(entropy).item()/(logits.shape[1])
-        
+            
             # NTP probabilities
             logits = logits.contiguous() 
             shift_labels = input_ids[..., 1:].contiguous() 
@@ -129,18 +132,19 @@ def main(args):
                 
             # expanded_attention_mask = attention_mask.unsqueeze(1) * attention_mask.unsqueeze(2)  # (bs, seq_len, seq_len)
             # mask = mask * expanded_attention_mask  # Apply padding mask
-
+            # import pdb; pdb.set_trace()
             # entropy of Attention scores 
             mask = torch.tril(torch.ones(seq_len, seq_len, device=model.device))
             for layer_idx, attention in enumerate(outputs.attentions):
-                log_probs = torch.log(attention + 1e-9) * mask #(bs, num_heads, seq_len, seq_len)
+                log_probs = torch.log(attention + 1e-4) * mask #(bs, num_heads, seq_len, seq_len)
                 entropy = -torch.sum(attention * log_probs, dim=-1) #(bs, num_heads, seq_len)
                 entropy = torch.mean(entropy, dim=1) # (bs, seq_len)
                 entropy_attention[layer_idx] += torch.sum(entropy).item()/(entropy.shape[-1])
 
+            # import pdb; pdb.set_trace()
             # entropy of MLP activations 
             for layer_idx, activation in enumerate(outputs.activations):
-                probs = F.softmax(activation, dim=-1)
+                probs = F.softmax(torch.abs(activation), dim=-1)
                 log_probs = torch.log(probs + 1e-9)
                 entropy = -torch.sum(probs * log_probs, dim=-1) # (bs, seq_len)
                 entropy_act[layer_idx] += torch.sum(entropy).item()/(entropy.shape[-1])
@@ -149,15 +153,22 @@ def main(args):
                 summed_activation = torch.sum(reshaped_activation, dim=0)
                 summed_activation /= activation.shape[1]
                 act_sparsity[layer_idx] += summed_activation
+            
+            for layer_idx, activation in enumerate(outputs.gate_activations):
+                probs = F.softmax(torch.abs(activation), dim=-1)
+                log_probs = torch.log(probs + 1e-9)
+                entropy = -torch.sum(probs * log_probs, dim=-1) # (bs, seq_len)
+                entropy_gate_act[layer_idx] += torch.sum(entropy).item()/(entropy.shape[-1])
+                
             # Clear memory
             del input_ids, outputs, logits, probs, log_probs, entropy, mask, shift_probabilities, gold_probabilities
             torch.cuda.empty_cache() 
         
-    import pdb; pdb.set_trace()
+    # import pdb; pdb.set_trace()
     entropy_pred /= batch_num
     entropy_act = [ act/batch_num for act in entropy_act]
     entropy_attention = [ att/batch_num for att in entropy_attention]
-    
+    entropy_gate_act = [ act/batch_num for act in entropy_gate_act]
     # activation sparsity
     act_sparsity /= batch_num
     probabilities = act_sparsity / torch.sum(act_sparsity, dim=1, keepdim=True)
@@ -187,6 +198,7 @@ def main(args):
     to_save = {
         "entropy_pred": entropy_pred,
         "entropy_act": entropy_act,
+        "entropy_gate_act":entropy_gate_act,
         "entropy_attention":entropy_attention,
         "entropy_act_sparsity": entropy_act_sparsity,
         "pred_distribution": {
@@ -256,7 +268,7 @@ if __name__ == "__main__":
     parser.add_argument("--data_manual_start_num", type=int, default=None)
     parser.add_argument("--data_manual_epoch", type=int, default=None)
     parser.add_argument("--finetuned_path", type=str, default=None)
-
+    parser.add_argument("--bf16", type=bool, default=False)
 
     
     # parser.add_argument("--model-path", type=str, default=None)
