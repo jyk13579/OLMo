@@ -59,8 +59,8 @@ def main(args):
     # calculate probability difference categorized
     result = analyse_prob(path, result)
     
-    # keys = EVAL_1 + EVAL_2 + EVAL_3 + EVAL_4 + EVAL_5
-    keys = EVAL_4_PROB + EVAL_5_PROB
+    keys = EVAL_1 + EVAL_2 + EVAL_3 + EVAL_4 + EVAL_5
+    # keys = EVAL_4_PROB + EVAL_5_PROB
     
     for key in keys:
         print_values(result[key], key)
@@ -265,7 +265,19 @@ def report(data_type):
         step_temp_prob += f"{step}|"
         for idx, element in enumerate(hist):
             result_prob[f"prob_{idx/100}"].append(str(int(element.item())))
-            
+        
+        if "new" in data_type or "cpt" in data_type:
+            act_path = f"checkpoints/pretrained/{step}/mlp_activation_sparsity_raw_{data_type}.pt"
+            if not os.path.isfile(act_path):
+                print(f"No file for {act_path}.")
+                continue
+            mlp_act = torch.load(act_path).cpu()
+            # import pdb; pdb.set_trace()
+            for k in [11008, 3000, 1000, 300, 100]:
+                avg, entropy = mlp_act_sparsity(mlp_act, k)
+                result[f"entropy_act_sparsity_top{str(k)}"].append(str(avg))
+                for layer_idx in range(32):
+                    result[f"entropy_act_sparsity_top{str(k)}_layer_{str(layer_idx)}"].append(str(entropy[layer_idx].item()))
         # total_variance = torch.var(all_gold_probabilities, unbiased=False)
         # result["pred_distribution_variance"].append(str(total_variance.item()))
 
@@ -280,6 +292,77 @@ def report(data_type):
     for k,v in result_prob.items():
         print(f"{k}|{'|'.join(v)}")
         
+def mlp_act_sparsity(act_sparsity, k):
+    top_values, _ = torch.topk(act_sparsity, k=k, dim=1)
+    prob_dist = top_values / torch.sum(top_values, dim=1, keepdim=True)
+    entropy = -torch.sum(prob_dist * torch.log(prob_dist + 1e-10), dim=-1) #(32,)
+    avg = entropy.sum().item()/32
+    # print(entropy.sum()/32)
+    # print(entropy)
+    return avg, entropy
+
+def initial_temperature(mlp):
+    mlp = torch.load("checkpoints/pretrained/557000/mlp_activation_sparsity_raw_next_1k_new.pt")
+    # for i in range(32):
+    #     max_ = mlp[i].max().item()
+    #     avg_ = mlp[i].sum().item()/11008
+    #     top_values, _ = torch.topk(mlp_110k[i], k=100)
+    #     min_top100 = top_values.min().item()
+    #     print(max_, "|", avg_, "|", min_top100)
+    new_tensor = torch.ones_like(mlp)
+    # for i in range(mlp.size(0)):
+    #     top_values, top_indices = torch.topk(mlp[i], 100)
+    #     min_top_value = top_values.min()
+    #     ratios = top_values / min_top_value
+    #     new_tensor[i, top_indices] = ratios
+    # torch.save(new_tensor, f"checkpoints/pretrained/557000/mlp_activation/top100_min_ratio.pt")
+        
+    mask = mlp > mlp.mean(dim=-1).unsqueeze(-1)
+    # new_tensor[mask] = 2.0
+    # torch.save(new_tensor, f"checkpoints/pretrained/557000/mlp_activation/top100_2.0.pt")
+                                  
+    mlp_110 = torch.load("checkpoints/pretrained/110000/mlp_activation_sparsity_raw_next_1k_new.pt")
+    relative = mlp / mlp_110
+    new_tensor[mask] = relative[mask]
+    torch.save(new_tensor, f"checkpoints/pretrained/557000/mlp_activation/relative_to_110_uppermean.pt")
+    torch.save(relative, f"checkpoints/pretrained/557000/mlp_activation/relative_to_110_all.pt")
+    
+    mlp = torch.load("checkpoints/pretrained/557000/mlp_activation_sparsity_raw_cpt_pubmed.pt")
+    mlp_110 = torch.load("checkpoints/pretrained/110000/mlp_activation_sparsity_raw_cpt_pubmed.pt")
+    mask = mlp > mlp.mean(dim=-1).unsqueeze(-1)
+    relative = mlp / mlp_110
+    new_tensor = torch.ones_like(mlp)
+    new_tensor[mask] = relative[mask]
+    torch.save(new_tensor, f"checkpoints/pretrained/557000/mlp_activation/relative_to_110_uppermean_pubmed.pt")
+
+def calculate_auc():
+
+    # Data from the table
+    data_new = {
+        '5k': [0.316, 0.499, 0.851, 0.962, 0.983, 0.989, 0.990, 0.991, 0.991, 0.991],
+        '110k': [0.388, 0.569, 0.835, 0.935, 0.963, 0.983, 0.990, 0.991, 0.991, 0.991],
+        '194k': [0.384, 0.543, 0.795, 0.922, 0.959, 0.979, 0.988, 0.991, 0.991, 0.991],
+        '278k': [0.384, 0.537, 0.780, 0.914, 0.957, 0.977, 0.988, 0.991, 0.991, 0.991],
+        '362k': [0.375, 0.504, 0.761, 0.911, 0.956, 0.976, 0.988, 0.991, 0.992, 0.992],
+        '432k': [0.360, 0.463, 0.334, 0.821, 0.930, 0.968, 0.985, 0.990, 0.991, 0.991],
+        '502k': [0.315, 0.393, 0.575, 0.837, 0.936, 0.968, 0.984, 0.989, 0.991, 0.991],
+        '557k': [0.195, 0.331, 0.464, 0.746, 0.925, 0.968, 0.985, 0.990, 0.991, 0.991]
+    }
+
+# Epochs
+import numpy as np
+epochs = np.arange(1, 11)
+
+# Calculate AUC for each key in the data dictionary
+auc_values = {}
+for key, values in data_new.items():
+    auc = np.trapz(values, epochs)
+    auc_values[key] = auc
+
+    # Display the AUC values
+for key, auc in auc_values.items():
+    print(f"{key}| {auc}")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--path", type=str, default=None)

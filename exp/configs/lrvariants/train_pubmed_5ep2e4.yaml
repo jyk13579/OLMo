@@ -1,0 +1,26 @@
+# data config
+dataset: pubmed
+split: train
+max_token_length: 1024
+
+# model config
+step: 110000
+model: allenai/OLMo-7B-hf
+
+# trainer config
+batch_size: 16
+accumulate_grad_batches: 2
+max_epochs: 5
+lr: 2e-4
+warmup_ratio: 0.03
+scheduler: cosine
+gradient_clip_val: 1.0
+save_strategy: "no"
+save_only_model: True
+report_to: wandb 
+
+# global config
+mode: train
+save_dir: checkpoints/finetuned_variants/2e4_5ep/counterfactual_110000_bs128_2e4_5ep_cosine
+debug_data: False
+seed: 42

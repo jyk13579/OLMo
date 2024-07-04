@@ -70,6 +70,7 @@ class ExpBaseModelOutputWithPast(BaseModelOutputWithPast):
     attentions: Optional[Tuple[torch.FloatTensor]] = None
     activations: Optional[Tuple[torch.FloatTensor]] = None
     gate_activations: Optional[Tuple[torch.FloatTensor]] = None
+    all_self_attn_weights_raw: Optional[Tuple[torch.FloatTensor]] = None
     
 @dataclass
 class ExpCausalLMOutputWithPast(ModelOutput):
@@ -80,6 +81,7 @@ class ExpCausalLMOutputWithPast(ModelOutput):
     attentions: Optional[Tuple[torch.FloatTensor]] = None
     activations: Optional[Tuple[Tuple[torch.FloatTensor]]] = None
     gate_activations: Optional[Tuple[Tuple[torch.FloatTensor]]] = None
+    all_self_attn_weights_raw: Optional[Tuple[torch.FloatTensor]] = None
     
 # Copied from transformers.models.llama.modeling_llama._get_unpad_data
 def _get_unpad_data(attention_mask):
@@ -242,10 +244,15 @@ class OlmoMLP(nn.Module):
         self.down_proj = nn.Linear(self.intermediate_size, self.hidden_size, bias=False)
         self.act_fn = ACT2FN[config.hidden_act]
 
-    def forward(self, x):
-        gate_activations = self.act_fn(self.gate_proj(x))
-        activations = gate_activations * self.up_proj(x)
-        return self.down_proj(activations), activations, gate_activations
+    def forward(self, x, mlp_temperature):
+        # gate_activations = self.act_fn(self.gate_proj(x))
+        # activations = gate_activations * self.up_proj(x)
+        # return self.down_proj(activations), None, None
+        # return self.down_proj(activations), activations.detach(), gate_activations.detach()
+        activations = self.act_fn(self.gate_proj(x)) * self.up_proj(x)
+        if mlp_temperature is not None:
+            activations /= mlp_temperature
+        return self.down_proj(activations), activations, None
 
 
 # Copied from transformers.models.llama.modeling_llama.repeat_kv
@@ -364,13 +371,14 @@ class OlmoAttention(nn.Module):
 
         key_states = repeat_kv(key_states, self.num_key_value_groups)
         value_states = repeat_kv(value_states, self.num_key_value_groups)
-
+        
         attn_weights = torch.matmul(query_states, key_states.transpose(2, 3)) / math.sqrt(self.head_dim)
-        attn_weights /= temperature
+        # attn_weights_raw = attn_weights.detach()
+        attn_weights = attn_weights/ temperature
         if attention_mask is not None:  # no matter the length, we just slice it
             causal_mask = attention_mask[:, :, :, : key_states.shape[-2]]
             attn_weights = attn_weights + causal_mask
-
+            # attn_weights_raw = attn_weights_raw + causal_mask
         # upcast attention to fp32
         attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(query_states.dtype)
         attn_weights = nn.functional.dropout(attn_weights, p=self.attention_dropout, training=self.training)
@@ -391,7 +399,8 @@ class OlmoAttention(nn.Module):
         if not output_attentions:
             attn_weights = None
 
-        return attn_output, attn_weights, past_key_value
+        # return attn_output, attn_weights, past_key_value, attn_weights_raw.detach()
+        return attn_output, attn_weights, past_key_value, None
 
 
 class OlmoFlashAttention2(OlmoAttention):
@@ -718,6 +727,7 @@ class OlmoDecoderLayer(nn.Module):
         use_cache: Optional[bool] = False,
         cache_position: Optional[torch.LongTensor] = None,
         temperature: float = 1.0, 
+        mlp_temperature: torch.Tensor = None,
         **kwargs,
     ) -> Tuple[torch.FloatTensor, Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]]:
         """
@@ -742,9 +752,9 @@ class OlmoDecoderLayer(nn.Module):
         residual = hidden_states
 
         hidden_states = self.input_layernorm(hidden_states)
-        import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
         # Self Attention
-        hidden_states, self_attn_weights, present_key_value = self.self_attn(
+        hidden_states, self_attn_weights, present_key_value, self_attn_weights_raw = self.self_attn(
             hidden_states=hidden_states,
             attention_mask=attention_mask,
             position_ids=position_ids,
@@ -756,11 +766,11 @@ class OlmoDecoderLayer(nn.Module):
             **kwargs,
         )
         hidden_states = residual + hidden_states
-
+        # print(hidden_states.requires_grad)
         # Fully Connected
         residual = hidden_states
         hidden_states = self.post_attention_layernorm(hidden_states)
-        hidden_states, activations, gate_activations = self.mlp(hidden_states)
+        hidden_states, activations, gate_activations = self.mlp(hidden_states, mlp_temperature)
         hidden_states = residual + hidden_states
 
         outputs = (hidden_states,)
@@ -771,6 +781,7 @@ class OlmoDecoderLayer(nn.Module):
         if use_cache:
             outputs += (present_key_value,)
         
+        outputs += (self_attn_weights_raw, )
         outputs += (activations,)
         outputs += (gate_activations, )
 
@@ -964,6 +975,7 @@ class OlmoModel(OlmoPreTrainedModel):
         return_dict: Optional[bool] = None,
         cache_position: Optional[torch.LongTensor] = None,
         temperature: float = 1.0,
+        mlp_temperature: torch.Tensor = None,
     ) -> Union[Tuple, ExpBaseModelOutputWithPast]:
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
@@ -1012,12 +1024,13 @@ class OlmoModel(OlmoPreTrainedModel):
         all_self_attns = () if output_attentions else None
         all_activations = ()
         all_gate_activations = ()
+        all_self_attn_weights_raw = ()
         next_decoder_cache = None
-
-        for decoder_layer in self.layers:
+        mlp_temperature = mlp_temperature if mlp_temperature is not None else [None]*len(self.layers)
+        for idx, decoder_layer in enumerate(self.layers):
             if output_hidden_states:
                 all_hidden_states += (hidden_states,)
-            import pdb; pdb.set_trace()
+            # import pdb; pdb.set_trace()
             if self.gradient_checkpointing and self.training:
                 layer_outputs = self._gradient_checkpointing_func(
                     decoder_layer.__call__,
@@ -1028,7 +1041,8 @@ class OlmoModel(OlmoPreTrainedModel):
                     output_attentions,
                     use_cache,
                     cache_position,
-                    # temperature,
+                    temperature,
+                    mlp_temperature[idx],
                 )
             else:
                 layer_outputs = decoder_layer(
@@ -1039,7 +1053,8 @@ class OlmoModel(OlmoPreTrainedModel):
                     output_attentions=output_attentions,
                     use_cache=use_cache,
                     cache_position=cache_position,
-                    # temperature = temperature,
+                    temperature = temperature,
+                    mlp_temperature=mlp_temperature[idx],
                 )
 
             hidden_states = layer_outputs[0]
@@ -1050,6 +1065,7 @@ class OlmoModel(OlmoPreTrainedModel):
             if output_attentions:
                 all_self_attns += (layer_outputs[1],)
                 
+            all_self_attn_weights_raw += (layer_outputs[-3],)
             all_activations += (layer_outputs[-2],)
             all_gate_activations += (layer_outputs[-1],)
             
@@ -1073,6 +1089,7 @@ class OlmoModel(OlmoPreTrainedModel):
             attentions=all_self_attns,
             activations=all_activations,
             gate_activations=all_gate_activations,
+            all_self_attn_weights_raw=all_self_attn_weights_raw,
         )
 
     # Copied from transformers.models.llama.modeling_llama.LlamaModel._update_causal_mask
@@ -1200,7 +1217,8 @@ class ExpOlmoForCausalLM(OlmoPreTrainedModel):
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
         cache_position: Optional[torch.LongTensor] = None,
-        temperature: float = 1.0
+        temperature: float = 1.0, 
+        mlp_temperature: torch.Tensor = None,
     ) -> Union[Tuple, ExpCausalLMOutputWithPast]:
         r"""
         Args:
@@ -1233,8 +1251,7 @@ class ExpOlmoForCausalLM(OlmoPreTrainedModel):
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
         )
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
-        import pdb; pdb.set_trace()
-        print("temperature:", temperature)
+        # import pdb; pdb.set_trace()
         # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
         outputs = self.model(
             input_ids=input_ids,
@@ -1248,6 +1265,7 @@ class ExpOlmoForCausalLM(OlmoPreTrainedModel):
             return_dict=return_dict,
             cache_position=cache_position,
             temperature=temperature,
+            mlp_temperature=mlp_temperature,
         )
 
         hidden_states = outputs[0]
@@ -1257,6 +1275,7 @@ class ExpOlmoForCausalLM(OlmoPreTrainedModel):
         loss = None
         if labels is not None:
             # Shift so that tokens < n predict n
+            # print(labels.shape)
             shift_logits = logits[..., :-1, :].contiguous()
             shift_labels = labels[..., 1:].contiguous()
             # Flatten the tokens
@@ -1279,6 +1298,7 @@ class ExpOlmoForCausalLM(OlmoPreTrainedModel):
             attentions=outputs.attentions,
             activations=outputs.activations,
             gate_activations=outputs.gate_activations,
+            all_self_attn_weights_raw=outputs.all_self_attn_weights_raw,
         )
 
     def prepare_inputs_for_generation(
@@ -1361,6 +1381,10 @@ class ExpOlmoForCausalLM(OlmoPreTrainedModel):
                 "attention_mask": attention_mask,
             }
         )
+        if kwargs.get("temperature", None) is not None:
+            model_inputs.update({"temperature":kwargs.get("temperature", None)})
+        if kwargs.get("mlp_temperature", None) is not None:
+            model_inputs.update({"mlp_temperature":kwargs.get("mlp_temperature", None)})
         return model_inputs
 
     @staticmethod

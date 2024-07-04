@@ -42,6 +42,9 @@ class ExpTrainer(Trainer):
         
         self.initial_temp = self.args.initial_temp
         self.final_temp = self.args.final_temp
+        self.mlp_temp = None
+        if self.args.mlp_temp:
+            self.mlp_temp = torch.load(self.args.mlp_temp).to(self.args.device)
         
         # train_dataloader = self.get_train_dataloader()
         # len_dataloader = len(train_dataloader)
@@ -60,11 +63,13 @@ class ExpTrainer(Trainer):
                 eval_dataloader = self.get_eval_gen_dataloader(dataset_prob_eval, batch_size = 2)
                 all_gold_probabilities = []
                 all_mask = []
-                
                 with torch.inference_mode():
                     for batch in tqdm(eval_dataloader):
                         input_ids = batch['input_ids'].to(self.args.device)
-                        outputs = self.model(input_ids=input_ids, output_attentions=True)
+                        inputs = {"input_ids": input_ids}
+                        if self.initial_temp != 1 or self.mlp_temp is not None:
+                            inputs = self.update_inputs(inputs)
+                        outputs = self.model(**inputs)
                         
                         logits = outputs.logits.detach()                        
                         logits = logits[:, :-1, :]                    
@@ -92,81 +97,90 @@ class ExpTrainer(Trainer):
                 all_gold_probabilities = all_gold_probabilities.float().half().detach()
                 torch.save(all_gold_probabilities, f"{self.args.output_dir}/step_{self.state.global_step}_gold_probabilities_{name_}.pt")
             elif gpu_num <= 4:
-                dataset_slot_gen = self.eval_dataset['slot_gen_orig'] if gpu_num == 2 else self.eval_dataset['slot_gen_para']
+                                    
                 name_ = "slot_generation_original" if gpu_num == 2 else "slot_generation_paraphrase"
-                gt_dataset = self.slot_data
-                ground_truths = [gt['answer'] for gt in gt_dataset]               
-                bs = 4 #self.args.per_device_eval_batch_size
-                eval_dataloader = self.get_eval_gen_dataloader(dataset_slot_gen, batch_size = bs)
-                output_to_save = []
-                generate_has_answers = []
-                for batch_idx, batch in tqdm(enumerate(eval_dataloader), total=len(eval_dataloader)):
-                    input_ids = batch["input_ids"]
-                    label_ids = batch["labels"]
-                    attention_mask = batch["attention_mask"]
-                    # import pdb; pdb.set_trace()
-                        
-                    non_padded_lengths = attention_mask.sum(dim=1)
-                    valid_labels_mask = label_ids != -100
-                    valid_label_sums = valid_labels_mask.sum(dim=1)
-                    difference = non_padded_lengths - valid_label_sums
-                    
-                    max_length = max(difference)
-                    padded_input_ids = torch.stack([
-                        torch.cat([
-                            torch.full((max_length - dif.item(),), self.tokenizer.pad_token_id, dtype=ids.dtype), 
-                            ids[:dif.item()]  # Valid input IDs shifted to the right
-                        ]) for ids, dif in zip(input_ids, difference)
-                    ]).to(self.args.device)
-
-                    new_attention_mask = torch.stack([
-                        torch.cat([
-                            torch.zeros(max_length - dif.item(), dtype=torch.long), 
-                            torch.ones(dif.item(), dtype=torch.long) 
-                        ]) for dif in difference
-                    ]).to(self.args.device)
-                        
-                    num_return_sequences = 5
-                    with torch.inference_mode():
-                        output_ids = self.model.generate(
-                            input_ids = padded_input_ids,
-                            attention_mask = new_attention_mask,
-                            do_sample=True, 
-                            temperature=0.8, 
-                            num_beams=5, 
-                            max_new_tokens=20, 
-                            min_length=3, 
-                            num_return_sequences=num_return_sequences, 
-                            use_cache=True)
-                        
-                    output_sequences_ = output_ids.view(padded_input_ids.shape[0], num_return_sequences, -1) 
-                    input_sequences = self.tokenizer.batch_decode(padded_input_ids, skip_special_tokens=True)
-            
-                    for inbatch_id, output in enumerate(output_sequences_):
-                        generated_answer = self.tokenizer.batch_decode(output[:, max_length:], skip_special_tokens=True)
-                        
-                        index = bs * batch_idx + inbatch_id
-                        this_answer = ground_truths[index]
-
-                        if isinstance(this_answer, str):
-                            has_answer = [this_answer.lower() in text.lower() for text in generated_answer]
-                        elif isinstance(this_answer, list):
-                            has_answer = [any(ans.lower() in output_item.lower() for ans in this_answer) for output_item in generated_answer]
+                
+                if 'slot_gen_orig' not in self.eval_dataset or 'slot_gen_para' not in self.eval_dataset:
+                    metric[f"{name_}_gen_accuracy"] = 0.0
+                else:
+                    dataset_slot_gen = self.eval_dataset['slot_gen_orig'] if gpu_num == 2 else self.eval_dataset['slot_gen_para']
+                    gt_dataset = self.slot_data
+                    ground_truths = [gt['answer'] for gt in gt_dataset]               
+                    bs = 4 #self.args.per_device_eval_batch_size
+                    eval_dataloader = self.get_eval_gen_dataloader(dataset_slot_gen, batch_size = bs)
+                    output_to_save = []
+                    generate_has_answers = []
+                    for batch_idx, batch in tqdm(enumerate(eval_dataloader), total=len(eval_dataloader)):
+                        input_ids = batch["input_ids"]
+                        label_ids = batch["labels"]
+                        attention_mask = batch["attention_mask"]
+                        # import pdb; pdb.set_trace()
                             
-                        generate_has_answers.append(sum(has_answer)>0)
-                        # print(gt_dataset[index])
-                        output_to_save.append({
-                            "question_id": gt_dataset[index]['id'],
-                            "input": input_sequences[inbatch_id],
-                            "generated_text": generated_answer,
-                            "answer": gt_dataset[index]['answer'],
-                            "has_answer": has_answer
-                        })
+                        non_padded_lengths = attention_mask.sum(dim=1)
+                        valid_labels_mask = label_ids != -100
+                        valid_label_sums = valid_labels_mask.sum(dim=1)
+                        difference = non_padded_lengths - valid_label_sums
+                        
+                        max_length = max(difference)
+                        padded_input_ids = torch.stack([
+                            torch.cat([
+                                torch.full((max_length - dif.item(),), self.tokenizer.pad_token_id, dtype=ids.dtype), 
+                                ids[:dif.item()]  # Valid input IDs shifted to the right
+                            ]) for ids, dif in zip(input_ids, difference)
+                        ]).to(self.args.device)
+
+                        new_attention_mask = torch.stack([
+                            torch.cat([
+                                torch.zeros(max_length - dif.item(), dtype=torch.long), 
+                                torch.ones(dif.item(), dtype=torch.long) 
+                            ]) for dif in difference
+                        ]).to(self.args.device)
                             
-                write_json_file(f"{self.args.output_dir}/step_{self.state.global_step}_gold_probabilities_{name_}.json", output_to_save)
-                eval_generate_accuracy = sum(generate_has_answers) / len(generate_has_answers)
-                perplexity = np.exp(loss)
-                metric[f"{name_}_gen_accuracy"] = eval_generate_accuracy
+                        num_return_sequences = 5
+                        
+                        inputs = {"input_ids": padded_input_ids, 
+                                "attention_mask": new_attention_mask,
+                                "do_sample": True, 
+                                "temperature": 0.8, 
+                                "num_beams": 5, 
+                                "max_new_tokens": 20, 
+                                "min_length": 3, 
+                                "num_return_sequences": num_return_sequences, 
+                                "use_cache": True,
+                                }
+                        if self.initial_temp != 1 or self.mlp_temp is not None:
+                            inputs = self.update_inputs(inputs)
+                        with torch.inference_mode():
+                            output_ids = self.model.generate(**inputs)
+                            
+                        output_sequences_ = output_ids.view(padded_input_ids.shape[0], num_return_sequences, -1) 
+                        input_sequences = self.tokenizer.batch_decode(padded_input_ids, skip_special_tokens=True)
+                
+                        for inbatch_id, output in enumerate(output_sequences_):
+                            generated_answer = self.tokenizer.batch_decode(output[:, max_length:], skip_special_tokens=True)
+                            
+                            index = bs * batch_idx + inbatch_id
+                            this_answer = ground_truths[index]
+
+                            if isinstance(this_answer, str):
+                                has_answer = [this_answer.lower() in text.lower() for text in generated_answer]
+                            elif isinstance(this_answer, list):
+                                has_answer = [any(ans.lower() in output_item.lower() for ans in this_answer) for output_item in generated_answer]
+                                
+                            generate_has_answers.append(sum(has_answer)>0)
+                            # print(gt_dataset[index])
+                            output_to_save.append({
+                                "question_id": gt_dataset[index]['id'],
+                                "input": input_sequences[inbatch_id],
+                                "generated_text": generated_answer,
+                                "answer": gt_dataset[index]['answer'],
+                                "has_answer": has_answer
+                            })
+                                
+                    write_json_file(f"{self.args.output_dir}/step_{self.state.global_step}_gold_probabilities_{name_}.json", output_to_save)
+                    eval_generate_accuracy = sum(generate_has_answers) / len(generate_has_answers)
+                    perplexity = np.exp(loss)
+                    metric[f"{name_}_gen_accuracy"] = eval_generate_accuracy
                 metric["dummy_0"] = 0.0
                 metric["dummy_1"] = 0.0
             else:   
@@ -209,29 +223,43 @@ class ExpTrainer(Trainer):
     
     def temperature_schedule(self, step, max_steps, initial_temp=1.0, final_temp=1.0):
         return initial_temp - (initial_temp - final_temp) * (step / max_steps)
+    
+    def tensor_temperature_schedule(self, new_tensor, step, max_steps):
+        final_temp = 1.0
+        new_tensor = new_tensor - (new_tensor - final_temp) * (step / max_steps)
+        return new_tensor
+    
+    def update_inputs(self, inputs):
+        
+        # Compute the current training step
+        step = self.state.global_step
+        max_steps = self.state.max_steps
+        # print(f"step: {step}, max_steps: {max_steps}")
+        # Compute the current temperature
+        temperature = self.temperature_schedule(step, max_steps, self.initial_temp, self.final_temp)
 
+        # Add temperature to model inputs
+        inputs["temperature"] = temperature
+        inputs["output_attentions"] = False
+        if self.mlp_temp is not None:
+            mlp_temperature = self.tensor_temperature_schedule(self.mlp_temp, step, max_steps)
+            inputs["mlp_temperature"] = mlp_temperature
+            
+        return inputs
+                
     def compute_loss(self, model, inputs, return_outputs=False):
         """
         How the loss is computed by Trainer. By default, all models return the loss in the first element.
 
         Subclass and override for custom behavior.
         """
-        if self.initial_temp != 1:
+        if self.initial_temp != 1 or self.mlp_temp is not None:
             if self.label_smoother is not None and "labels" in inputs:
                 labels = inputs.pop("labels")
             else:
                 labels = None
 
-            # Compute the current training step
-            step = self.state.global_step
-            max_steps = self.state.max_steps
-            print(f"step: {step}, max_steps: {max_steps}")
-            # Compute the current temperature
-            temperature = self.temperature_schedule(step, max_steps, self.initial_temp, self.final_temp)
-
-            # Add temperature to model inputs
-            inputs["temperature"] = temperature
-
+            inputs = self.update_inputs(inputs)
             outputs = model(**inputs)
             # Save past state if it exists
             # TODO: this needs to be fixed and made cleaner later.

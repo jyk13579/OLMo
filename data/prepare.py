@@ -58,3 +58,14 @@ def main():
             })
     write_json_file("data/corpus/fictional/fictional_keyword.json", to_save)
             
+def make_cf_data():
+    data = read_json_file("data/corpus/pubmed/pubmed_train_corpus.json")
+    derived = read_json_file("data/corpus/pubmed_derived.json")
+    meta = {d['id'][0]+"_"+d['type'] : d['text'] for d in derived}
+    
+    for d in data:
+        if 'id' in d:
+            k = d['id'][0]+"_counterfactual"
+            cf = meta[k]
+            d['text'] = cf
+    write_json_file("data/corpus/pubmed_counterfactual/pubmed_train_corpus.json", data)

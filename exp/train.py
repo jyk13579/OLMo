@@ -68,6 +68,30 @@ def make_eval_data_module(tokenizer, config):
             'slot_gen_orig': slot_gen_orig,
             'slot_gen_para': slot_gen_para,
         }
+    elif config.dataset == 'pubmed_counterfactual':
+        
+        data = read_json_file("data/corpus/pubmed_derived.json")
+        pubmed = CustomDataset(tokenizer, config, data=[d for d in data if d['type']=='counterfactual']) #train corpus
+        casual = CustomDataset(tokenizer, config, data=[d for d in data if d['type']=='casual'])
+        counterfactual = CustomDataset(tokenizer, config, data=[d for d in data if d['type']=='pubmed'])
+        
+        # original = SlotDataset(tokenizer, corpus_type="original", keywords_slot=True, config=config)
+        # paraphrase = SlotDataset(tokenizer, corpus_type="paraphrase", keywords_slot=True, config=config)
+            
+        dolma_prev = CustomDataset(tokenizer, data=dolma_prev_data, config=config)
+        # slot_gen_orig = SlotDataset(tokenizer, corpus_type="original",keywords_slot=False, config=config)
+        # slot_gen_para = SlotDataset(tokenizer, corpus_type="paraphrase", keywords_slot=False, config=config)
+        
+        evaluate_dataset = {
+            'original': pubmed,
+            'casual': casual,
+            'counterfactual': counterfactual,
+            # 'slotPubmed': original,
+            # 'slotParaphrase': paraphrase,
+            'dolma_prev': dolma_prev,
+            # 'slot_gen_orig': slot_gen_orig,
+            # 'slot_gen_para': slot_gen_para,
+        }
     elif config.dataset == 'fictional':
         data = read_json_file("data/corpus/fictional/fictional_keyword.json")        
         original_corpus = CustomDataset(tokenizer, config, data=[d for d in data if d['type']=='original'])
@@ -106,11 +130,12 @@ def print_trainables(model):
     print("\n\n")
     
 class CustomTrainingArguments(transformers.TrainingArguments):
-    def __init__(self, *args, step=0, initial_temp=1.0, **kwargs):
+    def __init__(self, *args, step=0, initial_temp=1.0, mlp_temp=None,**kwargs):
         super().__init__(*args, **kwargs)
         self.step = step
         self.initial_temp = initial_temp
         self.final_temp = 1.0
+        self.mlp_temp = mlp_temp
         
 def main(args) -> None:
     config = load_config(args.config)
@@ -174,8 +199,11 @@ def main(args) -> None:
         print("Prepare Trainer")
     # Prepare trainer
     callbacks = []
-    # callbacks.append(OnTrainBeginCallback())
-    print_trainables(model)
+    if config.get("eval_on_begin", True):
+        callbacks.append(OnTrainBeginCallback())
+    
+    if torch.cuda.current_device() == 0:
+        print_trainables(model)
     # import pdb; pdb.set_trace()
     trainer = ExpTrainer(
         model=model,
@@ -183,7 +211,7 @@ def main(args) -> None:
         args=CustomTrainingArguments(
             per_device_train_batch_size=config.batch_size,
             gradient_accumulation_steps=config.accumulate_grad_batches,
-            per_device_eval_batch_size=config.batch_size,
+            per_device_eval_batch_size=config.get("eval_batch_size", config.batch_size),
             num_train_epochs=config.max_epochs,
             gradient_checkpointing=True,
             optim="adamw_torch",
@@ -206,7 +234,8 @@ def main(args) -> None:
             prediction_loss_only=True,
             include_inputs_for_metrics=True,
             run_name = config.save_dir.split("/")[-1],
-            initial_temp=config.get("initial_temp", 1.0)
+            initial_temp=config.get("initial_temp", 1.0),
+            mlp_temp=config.get("mlp_temp_path", None),
         ),
         data_collator=DataCollatorForSupervisedDataset(tokenizer=tokenizer),
             # transformers.DataCollatorForLanguageModeling(
@@ -239,50 +268,6 @@ def main(args) -> None:
     else:
         raise ValueError("Invalid mode: %s" % config.mode)
 
-def save_dolma(loc, step=None):
-            
-    if loc == "prev_1k":
-        model_path = f"checkpoints/pretrained/{step}"
-        train_state = torch.load(f"{model_path}/train.pt")
-        
-        if step <= 432410:
-            epoch = 1
-            global_train_examples_seen_this_epoch = train_state['global_train_examples_seen']
-        else:
-            epoch = 2
-            global_train_examples_seen_this_epoch = train_state['global_train_examples_seen_this_epoch']
-            
-        global_train_examples_seen_this_epoch -= 2160000
-    elif loc == "first_1k":
-        epoch = 1
-        global_train_examples_seen_this_epoch = 0
-        
-    data_order_file_path=f"data/global_indices/global_indices_epoch{epoch}.npy"
-    global_indices = np.memmap(data_order_file_path, mode="r+", dtype=np.uint32)
-    print(f"\n Loaded dataset \n epoch: {epoch} \n global_train_examples_seen_this_epoch : {global_train_examples_seen_this_epoch}")
-    
-    instances = []
-    batch_start = global_train_examples_seen_this_epoch
-    for i in range(1000):
-        instances.append(global_indices[batch_start+i*2160])
-        
-    train_config_path = "configs/official/OLMo-7B_2160.yaml"    
-    cfg = TrainConfig.load(train_config_path)
-    dataset = build_memmap_dataset(cfg, cfg.data)
-    
-    # import pdb; pdb.set_trace()
-    tokenizer = AutoTokenizer.from_pretrained("allenai/OLMo-1.7-7B-hf")
-    to_save = []
-    print("\nStart decoding dataset")
-    for inst in tqdm(instances,total=1000):
-        input_ids = dataset[inst]['input_ids']
-        text = tokenizer.batch_decode([input_ids])
-        to_save.append({
-            "id": int(inst),
-            "text": text[0]
-        })
-        
-    write_json_file(f"data/dolma/step_{step}_{loc}.json", to_save)
     
 
 if __name__ == "__main__":
@@ -291,3 +276,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
     main(args)
     
+    # save_dolma("prev_1k", step=70000)

@@ -27,15 +27,16 @@ class CustomDataset(Dataset):
         if data:
             self.data = data
         else:
-            if config.dataset == 'pubmed':
-                self.data = read_json_file(f"data/corpus/pubmed_train_corpus.json")
+            if 'pubmed' in config.dataset:
+                self.data = read_json_file(f"data/corpus/{config.dataset}/pubmed_train_corpus.json")
             elif config.dataset == 'fictional':
                 self.data = read_json_file(f"data/corpus/fictional/fictional_train_corpus.json")
                 
         self.tokenizer = tokenizer
         self.max_length = config.max_token_length if config is not None else max_length
+        # print("max length: ", self.max_length)
         if config.debug_data:
-            self.data = self.data[:16]
+            self.data = self.data[:128]
 
     def __len__(self):
         return len(self.data)
@@ -75,10 +76,11 @@ class CustomDataset(Dataset):
         
 
 class IndexedDataset(Dataset):
-    def __init__(self, dataset, indices, tokenizer=None, config = None):
+    def __init__(self, dataset, indices, tokenizer=None, config = None, seq_len=2048):
         self.data = dataset
         self.indices = indices
         self.tokenizer = tokenizer 
+        self.seq_len = seq_len
         if config:
             if config.debug_data:
                 self.data = self.data[:16]
@@ -89,7 +91,7 @@ class IndexedDataset(Dataset):
     def __getitem__(self, idx):
         if self.tokenizer:
             item_data = self.data[idx]
-            encoding = self.tokenizer(item_data, max_length=2048, padding="max_length", truncation=True, return_tensors="pt")
+            encoding = self.tokenizer(item_data, max_length=self.seq_len, padding="max_length", truncation=True, return_tensors="pt")
             input_ids = encoding["input_ids"].squeeze(0) 
             attention_mask = encoding["attention_mask"].squeeze(0) 
             return {"input_ids": input_ids, "attention_mask": attention_mask}
@@ -103,7 +105,7 @@ class SlotDataset(Dataset):
         if data:
             self.data = data
         else:
-            self.data = read_json_file("data/corpus/pubmed_keyword.json")
+            self.data = read_json_file(f"data/corpus/pubmed_keyword.json")
         self.tokenizer = tokenizer 
         self.corpus_type = corpus_type
         self.keywords_slot = keywords_slot

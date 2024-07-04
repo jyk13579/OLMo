@@ -1,0 +1,30 @@
+# data config
+dataset: pubmed
+split: train
+max_token_length: 1024
+
+# model config
+step: 502000
+model: allenai/OLMo-7B-hf
+
+# trainer config
+batch_size: 16
+accumulate_grad_batches: 2
+eval_batch_size: 8
+max_epochs: 10
+lr: 1e-4
+warmup_ratio: 0.03
+scheduler: cosine
+gradient_clip_val: 1.0
+save_strategy: epoch
+save_only_model: True
+report_to: wandb 
+
+# global config
+mode: train
+save_dir: checkpoints/finetuned_perturb/entropy_557000_attn_temp_1.5_mlp_pubmed_relative_to_110_uppermean_debug
+initial_temp: 1.5
+debug_data: True
+eval_on_begin: True
+seed: 42
+mlp_temp_path: checkpoints/pretrained/557000/mlp_activation/relative_to_110_all.pt
