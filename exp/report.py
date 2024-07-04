@@ -230,13 +230,27 @@ def compare_prob():
 
 def report(data_type):
     import os
-    filelist = [int(n) for n in os.listdir("checkpoints/pretrained") if "_" not in n]
+    if 'dolma' in data_type:
+        filelist = [5000, 110000, 194000, 278000, 362000, 432410, 502000, 557000]
+        eval_path_ = "checkpoints/pretrained/dolma_prob/{}/model{}_entropy_{}_new.json"
+        prob_path_ = "checkpoints/pretrained/dolma_prob/{}/model{}_gold_prob_{}_new.pt"
+        
+    else:
+        filelist = [int(n) for n in os.listdir("checkpoints/pretrained") if "_" not in n]
+        eval_path_ = "checkpoints/pretrained/{}/entropy_{}.json"
+        prob_path_ = "checkpoints/pretrained/{}/gold_probabilities_{}.pt"
+        
     result = defaultdict(list)
     step_temp = "step|"
     result_prob = defaultdict(list)
     step_temp_prob = "step|"
     for step in sorted(filelist):
-        eval_path = f"checkpoints/pretrained/{step}/entropy_{data_type}.json"
+        if 'dolma' in data_type:
+            eval_path = eval_path_.format(data_type, step, data_type)
+            prob_path = prob_path_.format(data_type, step, data_type)
+        else:
+            eval_path = eval_path_.format(step, data_type)
+            prob_path = prob_path_.format(step, data_type)
         if not os.path.isfile(eval_path):
             print(f"No file for {eval_path}.")
             continue
@@ -252,19 +266,21 @@ def report(data_type):
                     result[f"{k}_{k_temp}"].append(str(data[k][k_temp]))
             else:
                 result[k].append(str(data[k]))      
-        
+        # import pdb; pdb.set_trace()
         # gold prob
-        prob_path = f"checkpoints/pretrained/{step}/gold_probabilities_{data_type}.pt"
         if not os.path.isfile(prob_path):
             print(f"No file for {prob_path}.")
             continue
         all_gold_probabilities = torch.load(prob_path).cpu()
         all_gold_probabilities = all_gold_probabilities.float()
-        num_bins = 100
-        hist = torch.histc(all_gold_probabilities, bins=num_bins, min=0, max=1)
-        step_temp_prob += f"{step}|"
-        for idx, element in enumerate(hist):
-            result_prob[f"prob_{idx/100}"].append(str(int(element.item())))
+        log_prob = -torch.log(all_gold_probabilities+ 1e-6)
+        mean_log = torch.mean(log_prob)
+        result["pred_distribution_mean_log_prob"].append(str(mean_log.item()))
+        # num_bins = 100
+        # hist = torch.histc(all_gold_probabilities, bins=num_bins, min=0, max=1)
+        # step_temp_prob += f"{step}|"
+        # for idx, element in enumerate(hist):
+        #     result_prob[f"prob_{idx/100}"].append(str(int(element.item())))
         
         if "new" in data_type or "cpt" in data_type:
             act_path = f"checkpoints/pretrained/{step}/mlp_activation_sparsity_raw_{data_type}.pt"
@@ -287,10 +303,10 @@ def report(data_type):
         if "instances" not in k:
             print(f"{k}|{'|'.join(v)}")
 
-    print("\n\n\n", step_temp_prob)
-    result_prob = dict(sorted(result_prob.items()))
-    for k,v in result_prob.items():
-        print(f"{k}|{'|'.join(v)}")
+    # print("\n\n\n", step_temp_prob)
+    # result_prob = dict(sorted(result_prob.items()))
+    # for k,v in result_prob.items():
+    #     print(f"{k}|{'|'.join(v)}")
         
 def mlp_act_sparsity(act_sparsity, k):
     top_values, _ = torch.topk(act_sparsity, k=k, dim=1)
@@ -349,19 +365,19 @@ def calculate_auc():
         '557k': [0.195, 0.331, 0.464, 0.746, 0.925, 0.968, 0.985, 0.990, 0.991, 0.991]
     }
 
-# Epochs
-import numpy as np
-epochs = np.arange(1, 11)
+    # Epochs
+    import numpy as np
+    epochs = np.arange(1, 11)
 
-# Calculate AUC for each key in the data dictionary
-auc_values = {}
-for key, values in data_new.items():
-    auc = np.trapz(values, epochs)
-    auc_values[key] = auc
+    # Calculate AUC for each key in the data dictionary
+    auc_values = {}
+    for key, values in data_new.items():
+        auc = np.trapz(values, epochs)
+        auc_values[key] = auc
 
-    # Display the AUC values
-for key, auc in auc_values.items():
-    print(f"{key}| {auc}")
+        # Display the AUC values
+    for key, auc in auc_values.items():
+        print(f"{key}| {auc}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

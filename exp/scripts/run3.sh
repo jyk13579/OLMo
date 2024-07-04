@@ -11,4 +11,6 @@
 
 # CUDA_VISIBLE_DEVICES=6 python -m exp.run --step 502000 --data_type manual --data_path 1k501 --data_size 1000 --data_manual_start_num 148154400 --data_manual_epoch 2   
 
-CUDA_VISIBLE_DEVICES=6 python -m exp.run --data_step 5000 --data_type prev_1 --step 432410 
+CUDA_VISIBLE_DEVICES=6 python -m exp.run --data_step 5000 --data_type prev_1 --step 278000 
+CUDA_VISIBLE_DEVICES=6 python -m exp.run --data_step 432410 --data_type prev_1 --step 278000 
+# CUDA_VISIBLE_DEVICES=2 python -m exp.run --data_step 432410 --data_type prev_1 --step 5000 

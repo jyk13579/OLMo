@@ -11,6 +11,7 @@ from olmo.config import TrainConfig
 from olmo.data import build_memmap_dataset
 from torch.utils.data import Dataset, DataLoader
 from .dataset import IndexedDataset
+import os
 
 def main(args):     
                
@@ -202,9 +203,10 @@ def main(args):
         torch.save(all_gold_probabilities, f"{model_path}/gold_probabilities_{args.data_type}{name}.pt")
     else:
         path = 'checkpoints/pretrained/dolma_prob' 
+        os.makedirs(f"{path}/dolma{args.data_step}", exist_ok=True)
         write_json_file(f"{path}/dolma{args.data_step}/model{args.step}_entropy_dolma{args.data_step}_new.json", to_save)
         torch.save(all_gold_probabilities, f"{path}/dolma{args.data_step}/model{args.step}_gold_prob_dolma{args.data_step}_new.pt")
-        torch.save(act_sparsity, f"{model_path}/dolma{args.data_step}/model{args.step}_mlp_act_dolma{args.data_step}_new.pt")
+        torch.save(act_sparsity, f"{path}/dolma{args.data_step}/model{args.step}_mlp_act_dolma{args.data_step}_new.pt")
     
 def load_model(args):
             
@@ -254,7 +256,7 @@ def load_model(args):
         if args.data_type == "next_1k_new": 
             dataset = read_json_file(f"data/dolma/step_{args.step}_next_1k.json")
         else:
-            dataset = read_json_file(f"data/dolma/prev_1/step_{args.data_step}_prev_1.json")
+            dataset = read_json_file(f"data/dolma/step_{args.data_step}_prev_1.json")
             
         print(f"\n Loaded dolma dataset \n length: {len(dataset)} \n example: {dataset[0]}")
         dataset = [d['text'] for d in dataset]

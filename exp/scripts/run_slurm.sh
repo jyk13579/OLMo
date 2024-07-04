@@ -10,5 +10,4 @@
 #SBATCH --time=24:00:00            # Time limit
 #SBATCH --gres=gpu:1               # Number of GPUs to be allocated
 
-srun python -m exp.run \
-    --step 432410 --data_type next_1k --data_size 1000 --batch_size 1
+srun python -m exp.run --data_step 194000 --data_type prev_1 --step 557000

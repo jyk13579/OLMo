@@ -32,3 +32,4 @@
 # CUDA_VISIBLE_DEVICES=0 python -m exp.run --step 278000 --data_type cpt --data_path pubmed
 
 CUDA_VISIBLE_DEVICES=4 python -m exp.run --data_step 5000 --data_type prev_1 --step 110000 
+CUDA_VISIBLE_DEVICES=4 python -m exp.run --data_step 432410 --data_type prev_1 --step 110000 
