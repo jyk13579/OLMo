@@ -64,21 +64,47 @@
 # CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/train_pubmed_5ep2e4.yaml
 # CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/train_pubmed_1ep3e4.yaml
 
+# CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/train_pubmed_3ep3e4.yaml
+# CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/train_pubmed_3ep1e4.yaml
+# CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/train_pubmed_3ep7e5.yaml
+# CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/train_pubmed_3ep3e5.yaml
 
-CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/train_pubmed_3ep3e4.yaml
-CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/train_pubmed_3ep1e4.yaml
-CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/train_pubmed_3ep7e5.yaml
-CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/train_pubmed_3ep3e5.yaml
+# CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/train_pubmed_1ep1e4.yaml
+# CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/train_pubmed_1ep7e5.yaml
+# CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/train_pubmed_1ep3e5.yaml
 
-CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/train_pubmed_1ep1e4.yaml
-CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/train_pubmed_1ep7e5.yaml
-CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/train_pubmed_1ep3e5.yaml
+# CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/train_pubmed_5ep3e4.yaml
+# CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/train_pubmed_5ep1e4.yaml
 
-CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/train_pubmed_5ep3e4.yaml
-CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/train_pubmed_5ep1e4.yaml
-CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/train_pubmed_5ep7e5.yaml
-CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/train_pubmed_5ep3e5.yaml
 
-CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/train_pubmed_10ep7e5.yaml
-CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/train_pubmed_10ep3e5.yaml
+# CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/557k/3ep/train_pubmed_3ep1e4.yaml
+# CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/557k/3ep/train_pubmed_3ep2e4.yaml
+# CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/557k/3ep/train_pubmed_3ep3e4.yaml
+# CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/557k/3ep/train_pubmed_3ep3e5.yaml
+# CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/557k/3ep/train_pubmed_3ep7e5.yaml
+
+# ------------complete
+
+CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/194k/3ep/train_pubmed_3ep1e4.yaml
+CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/194k/3ep/train_pubmed_3ep2e4.yaml
+CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/194k/3ep/train_pubmed_3ep3e4.yaml
+CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/194k/3ep/train_pubmed_3ep3e5.yaml
+CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/194k/3ep/train_pubmed_3ep7e5.yaml
+
+CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/432k/3ep/train_pubmed_3ep1e4.yaml
+CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/432k/3ep/train_pubmed_3ep2e4.yaml
+CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/432k/3ep/train_pubmed_3ep3e4.yaml
+CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/432k/3ep/train_pubmed_3ep3e5.yaml
+CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/432k/3ep/train_pubmed_3ep7e5.yaml
+
+CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/502k/3ep/train_pubmed_3ep3e4.yaml
+CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/502k/3ep/train_pubmed_3ep3e5.yaml
+CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/502k/3ep/train_pubmed_3ep7e5.yaml
+
+
+# CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/train_pubmed_5ep7e5.yaml
+# CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/train_pubmed_5ep3e5.yaml
+
+# CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/train_pubmed_10ep7e5.yaml
+# CUDA_VISIBLE_DEVICES="4,5,6,7" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/lrvariants/train_pubmed_10ep3e5.yaml
 

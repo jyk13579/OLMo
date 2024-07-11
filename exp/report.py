@@ -3,7 +3,7 @@ from collections import defaultdict
 import argparse
 import glob
 import torch
-
+import os
 # from sklearn.linear_model import LinearRegression
 # from sklearn.metrics import mean_squared_error, r2_score
 
@@ -35,35 +35,45 @@ EVAL_5_LOSS = ['eval_dolma_prev_loss',
                 'eval_original_dolma_prev1k_variance_probability']
 
 EVAL_5_PROB = [f"eval_prev_prob_diff_{k}" for k in ranges] + [f"eval_prev_prob_count_{k}" for k in ranges]
+LOG_PROB = [f"eval_new_log_prob_diff_{k}" for k in ranges] + [f"eval_prev_log_prob_diff_{k}" for k in ranges] 
                 
 EVAL_5 = EVAL_5_LOSS + EVAL_5_PROB
 
 def main(args):
-    result = defaultdict(dict)
-    path = args.path
-    trainer_state = read_json_file(f"{path}/trainer_state.json")
-    for log in trainer_state['log_history']:
-        epoch = log.pop('epoch')
-        step = log.pop('step')
-        if "grad_norm" in log.keys() or "train_loss" in log.keys():
-            pass
-        else:
-            for key, value in log.items():
-                result[key][round(epoch)] = str(value)
+    
+    paths = [f"{args.folder_path}/{n}" for n in os.listdir(args.folder_path)] if args.folder_path is not None else [args.path]
+    # path = args.path
+    for path in paths:
+        result = defaultdict(dict)
+        trainer_state = read_json_file(f"{path}/trainer_state.json")
+        for log in trainer_state['log_history']:
+            epoch = log.pop('epoch')
+            step = log.pop('step')
+            if "grad_norm" in log.keys() or "train_loss" in log.keys():
+                pass
+            else:
+                for key, value in log.items():
+                    result[key][round(epoch)] = str(value)
+                    
+        # calculate difference between casual & counterfactual
+        for k in result['eval_casual_loss'].keys():
+            dif = float(result['eval_casual_loss'][k]) - float(result['eval_counterfactual_loss'][k])
+            result['diff_casual_cf'][k] = str(dif)
                 
-    # calculate difference between casual & counterfactual
-    for k in result['eval_casual_loss'].keys():
-        dif = float(result['eval_casual_loss'][k]) - float(result['eval_counterfactual_loss'][k])
-        result['diff_casual_cf'][k] = str(dif)
-            
-    # calculate probability difference categorized
-    result = analyse_prob(path, result)
-    
-    keys = EVAL_1 + EVAL_2 + EVAL_3 + EVAL_4 + EVAL_5
-    # keys = EVAL_4_PROB + EVAL_5_PROB
-    
-    for key in keys:
-        print_values(result[key], key)
+        # calculate probability difference categorized
+        result = analyse_prob(path, result, log_prob=True)
+        
+        # keys = EVAL_1 + EVAL_2 + EVAL_3 + EVAL_4 + EVAL_5
+        # keys = EVAL_4_PROB + EVAL_5_PROB
+        keys = LOG_PROB
+        mod = str(int(path.split("/")[-1].split("_")[0])//1000)+"k"
+        epo = path.split("/")[-1].split("_")[3].replace("ep","")
+        lr = path.split("/")[-1].split("_")[2].replace("e", "e-")
+        
+        # print("\n\n", "-"*50, path)
+        for key in keys:
+            # print_values(result[key], key)
+            print_values(result[key], f"{lr}|{epo}|{mod}|{key}")
     
 def print_values(res, key):
     print(f"{key}|", "|".join(res.values()))
@@ -74,22 +84,22 @@ def print_prob(path):
     for key in keys:
         print_values(result[key], key)
         
-def analyse_prob(path, result=defaultdict(dict)): 
+def analyse_prob(path, result=defaultdict(dict), log_prob = False): 
         
     sorted_loaded_files = load_tensors(path, "pubmed_orig")
     for ep in range(len(sorted_loaded_files)):
-        stats, counts, _ = analyse(sorted_loaded_files[0]) if ep == 0 else analyse(sorted_loaded_files[0], sorted_loaded_files[ep])
+        stats, counts, _ = analyse(sorted_loaded_files[0], log_prob = log_prob) if ep == 0 else analyse(sorted_loaded_files[0], sorted_loaded_files[ep], log_prob = log_prob)
         # import pdb; pdb.set_trace()
         for k,v in stats.items():
-            result[f"eval_new_prob_diff_{k}"][ep] = str(v)
-            result[f"eval_new_prob_count_{k}"][ep] = str(counts[k])
+            result[f"eval_new_{'log_' if log_prob else ''}prob_diff_{k}"][ep] = str(v)
+            result[f"eval_new_{'log_' if log_prob else ''}prob_count_{k}"][ep] = str(counts[k])
         
     sorted_loaded_files = load_tensors(path, "dolma_prev1k")
     for ep in range(len(sorted_loaded_files)):
-        stats, counts, _ = analyse(sorted_loaded_files[0]) if ep == 0 else analyse(sorted_loaded_files[0], sorted_loaded_files[ep])
+        stats, counts, _ = analyse(sorted_loaded_files[0], log_prob = log_prob) if ep == 0 else analyse(sorted_loaded_files[0], sorted_loaded_files[ep], log_prob = log_prob)
         for k,v in stats.items():
-            result[f"eval_prev_prob_diff_{k}"][ep] = str(v)
-            result[f"eval_prev_prob_count_{k}"][ep] = str(counts[k])
+            result[f"eval_prev_{'log_' if log_prob else ''}prob_diff_{k}"][ep] = str(v)
+            result[f"eval_prev_{'log_' if log_prob else ''}prob_count_{k}"][ep] = str(counts[k])
     
     return result
     
@@ -111,14 +121,20 @@ def load_tensors(folder_path, name):
         
     return loaded_files
     
-def analyse(prob_pre, prob_ft=None, ranges=custom_ranges):
+def analyse(prob_pre, prob_ft=None, ranges=custom_ranges, log_prob = False):
     stats = {}
     counts = {}
     result = {}
     if prob_ft is not None:
-        diff = prob_ft - prob_pre
+        if log_prob:
+            diff = -torch.log(prob_ft+ 1e-6) + torch.log(prob_pre+ 1e-6)
+        else:
+            diff = prob_ft - prob_pre
     else:
-        diff = prob_pre
+        if log_prob:
+            diff = -torch.log(prob_pre+ 1e-6)
+        else:
+            diff = prob_pre
     stats['all'] = diff.mean().item()
     counts['all'] = diff.shape[0]
     for r_min, r_max in ranges:
@@ -232,6 +248,7 @@ def report(data_type):
     import os
     if 'dolma' in data_type:
         filelist = [5000, 110000, 194000, 278000, 362000, 432410, 502000, 557000]
+        # filelist = [40000, 50000, 60000, 70000, 80000, 90000, 100000]
         eval_path_ = "checkpoints/pretrained/dolma_prob/{}/model{}_entropy_{}_new.json"
         prob_path_ = "checkpoints/pretrained/dolma_prob/{}/model{}_gold_prob_{}_new.pt"
         
@@ -382,6 +399,7 @@ def calculate_auc():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--path", type=str, default=None)
+    parser.add_argument("--folder_path", type=str, default=None)
     parser.add_argument("--report", type=bool, default=False) #if True, pretrained report // False, finetuned report
     parser.add_argument("--data_type", type=str, default="last_1k")
     args = parser.parse_args()
