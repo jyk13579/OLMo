@@ -1,5 +1,7 @@
 import logging
 import math
+import pickle
+import json
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Sequence, Union
 
@@ -66,8 +68,18 @@ class IterableDataset(torch.utils.data.IterableDataset[Dict[str, Any]]):
         self.global_indices_file: Optional[Path] = None
         self.work_dir = work_dir
 
-        if work_dir is not None:
-            self._build_and_save_global_indices()
+        # if self.inject_indices_map is not None:
+        #     log.warning("Detected knowledge injection mode configuration!")
+        #     with open(self.inject_indices_map, 'rb') as f:
+        #         self.inject_indices_map = pickle.load(f)
+        #         self.inject_indices = self.inject_indices_map.keys()
+        #         log.warning(f"inject_indices: {self.inject_indices}")
+        #         log.warning(f'Rank: {self.rank} | Start idx: {self.start_index}')
+            
+        # else:
+        #     log.warning("Detected normal pre-training mode configuration!")
+        #     if work_dir is not None:
+        #         self._build_and_save_global_indices()
 
     def _build_and_save_global_indices(self):
         assert self.work_dir is not None
@@ -131,7 +143,7 @@ class IterableDataset(torch.utils.data.IterableDataset[Dict[str, Any]]):
 
         # Start at the specified index.
         if self.start_index > 0:
-            #  assert self.start_index % self.world_size == 0
+            assert self.start_index % self.world_size == 0
             indices = indices[self.start_index :]
 
         # Slice indices by rank to avoid duplicates.

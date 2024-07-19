@@ -7,8 +7,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from .modeling_olmo_hf import ExpOlmoForCausalLM
 import numpy as np
 import torch.nn.functional as F
-from olmo.config import TrainConfig
-from olmo.data import build_memmap_dataset
+from olmo_old.config import TrainConfig
+from olmo_old.data import build_memmap_dataset
 from torch.utils.data import Dataset, DataLoader
 from .dataset import IndexedDataset
 import os

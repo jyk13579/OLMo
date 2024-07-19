@@ -2,7 +2,7 @@ from typing import List
 
 import pytest
 
-from olmo.config import (
+from olmo_old.config import (
     DataConfig,
     InitFnType,
     ModelConfig,
@@ -12,7 +12,7 @@ from olmo.config import (
     TokenizerConfig,
     TrainConfig,
 )
-from olmo.tokenizer import Tokenizer
+from olmo_old.tokenizer import Tokenizer
 
 TEST_MODEL = "gpt2"
 

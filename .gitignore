@@ -61,4 +61,5 @@ checkpoints/
 data/global_indices/
 data/corpus/raw/
 data/dolma/thepile/
+data/dolma_npy/
 slurm/

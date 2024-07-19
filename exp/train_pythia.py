@@ -16,8 +16,8 @@ import argparse
 from dataset import CustomDataset, IndexedDataset, SlotDataset, read_json_file, write_json_file, read_jsonl_file
 from trainer import ExpTrainer, OnTrainBeginCallback, DataCollatorForSupervisedDataset
 import numpy as np
-from olmo.config import TrainConfig
-from olmo.data import build_memmap_dataset
+from olmo_old.config import TrainConfig
+from olmo_old.data import build_memmap_dataset
 from dataclasses import dataclass, field
 from tqdm import tqdm 
 
