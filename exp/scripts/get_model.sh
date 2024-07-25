@@ -22,3 +22,9 @@ cd "/data/jiyeon/OLMo"
 python scripts/convert_olmo_to_hf_new.py --input_dir "${OUTPUT_PATH}" --output_dir "${OUTPUT_PATH}/hf" --tokenizer_json_path tokenizers/allenai_gpt-neox-olmo-dolma-v1_5.json
 
 # rm "$OUTPUT_PATH/model.pt"
+
+
+
+olmo = OLMoForCausalLM.from_pretrained("allenai/OLMo-7B", revision="step556000-tokens2460B", cache_dir="/data/jiyeon/OLMo/checkpoints/pretrained_hf/556000")
+
+

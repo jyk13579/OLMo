@@ -455,6 +455,13 @@ def read_json_file(file_path):
         res = json.load(f)
     return res
 
+def read_safetensor(path):
+    from safetensors import safe_open 
+    tensors={}
+    with safe_open(path, framework="pt", device='cpu') as f:
+        for k in f.keys():
+            tensors[k] = f.get_tensor(k)
+    return tensors
 # def get_next_1k_instances(start_idx: int) -> list[list[int]]:
 #     batch_start = start_idx * batch_size
 #     batch_instances = []
@@ -535,7 +542,9 @@ def save_dolma(loc, step=None):
             global_train_examples_seen_this_epoch = train_state['global_train_examples_seen_this_epoch']
             
         global_train_examples_seen_this_epoch -= 2160
-        
+    elif loc == "manual":
+        epoch = 1
+        global_train_examples_seen_this_epoch = 8640000
         
     data_order_file_path=f"data/global_indices/global_indices_epoch{epoch}.npy"
     global_indices = np.memmap(data_order_file_path, mode="r+", dtype=np.uint32)
@@ -544,6 +553,8 @@ def save_dolma(loc, step=None):
     instances = []
     batch_start = global_train_examples_seen_this_epoch
     term = 2160 if loc != "prev_1" else 1
+    term = 886 if step == 432000 else term
+    print(f"start : {batch_start}, term: {term}, last: {999*term}")
     for i in range(1000):
         instances.append(global_indices[batch_start+i*term])
         

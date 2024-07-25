@@ -63,3 +63,5 @@ data/corpus/raw/
 data/dolma/thepile/
 data/dolma_npy/
 slurm/
+data/dolma/token_classified/
+analysis/eval_data

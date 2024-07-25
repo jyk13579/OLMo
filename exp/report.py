@@ -125,9 +125,11 @@ def analyse(prob_pre, prob_ft=None, ranges=custom_ranges, log_prob = False):
     stats = {}
     counts = {}
     result = {}
+    # import pdb; pdb.set_trace()
     if prob_ft is not None:
         if log_prob:
             diff = -torch.log(prob_ft+ 1e-6) + torch.log(prob_pre+ 1e-6)
+            log_prob_pre = -torch.log(prob_pre + 1e-6)
         else:
             diff = prob_ft - prob_pre
     else:
@@ -141,7 +143,7 @@ def analyse(prob_pre, prob_ft=None, ranges=custom_ranges, log_prob = False):
         mask = (prob_pre >= r_min) & (prob_pre < r_max)        
         filtered_diff = diff[mask]
         if filtered_diff.numel() > 0:
-            mean_orig = prob_pre[mask].mean().item()
+            mean_orig = log_prob_pre[mask].mean().item() if log_prob else prob_pre[mask].mean().item()
             mean_diff = filtered_diff.mean().item()
             std_diff = filtered_diff.std().item()
             min_diff = filtered_diff.min().item()
@@ -160,6 +162,7 @@ def analyse(prob_pre, prob_ft=None, ranges=custom_ranges, log_prob = False):
         result[f"{r_min}-{r_max}"] = {
                 'orig_mean': mean_orig,
                 'orig_count': filtered_diff.shape[0],
+                'orig_portion': filtered_diff.shape[0]/diff.numel(),
                 'mean': mean_diff,
                 'std': std_diff,
                 'min': min_diff,
@@ -225,25 +228,28 @@ def compare_prob():
         prob_next_0 = load_pt(f"checkpoints/pretrained/{step}/gold_probabilities_manual_1k{int(step/1000)}.pt")
         prob_next_1 = load_pt(f"checkpoints/pretrained/{next_step}/gold_probabilities_manual_1k{int(step/1000)}.pt")
         # import pdb; pdb.set_trace()
-        stats, _, result = analyse(prob_next_0, prob_next_1)
+        stats, _, result = analyse(prob_next_0, prob_next_1, log_prob=True)
         print("-"*50)
-        print(f"\n{step} for next 1k")
+        print(f"{step} for next 1k")
         
         # print("|".join(stats['regression'].keys()))
         # print("|".join([str(v) for v in stats['regression'].values()]))
         for k,v in result.items():
-            print(f"{k}|{v['orig_mean']}|{v['orig_count']}|{v['mean']}|{v['std']}|{v['min']}|{v['max']}|{v['count']}")
-                
+            print(f"{k}|{v['orig_mean']}|{v['orig_count']}|{v['orig_portion']}|{v['mean']}|{v['std']}|{v['min']}|{v['max']}|{v['count']}")
+        print("")
+    for step, next_step in zip(steps, next_steps):
         prob_prev_0 = load_pt(f"checkpoints/pretrained/{step}/gold_probabilities_manual_1k{int(step/1000 -1)}.pt")
         prob_prev_1 = load_pt(f"checkpoints/pretrained/{next_step}/gold_probabilities_manual_1k{int(step/1000 -1)}.pt")
 
-        stats, _, result = analyse(prob_prev_0, prob_prev_1)
-        print("\n\n")
+        stats, _, result = analyse(prob_prev_0, prob_prev_1, log_prob=True)
+        print("-"*50)
+        print(f"{step} for previous 1k")
         # print("|".join(stats['regression'].keys()))
         # print("|".join([str(v) for v in stats['regression'].values()]))
         for k,v in result.items():
-            print(f"{k}|{v['orig_mean']}|{v['orig_count']}|{v['mean']}|{v['std']}|{v['min']}|{v['max']}|{v['count']}")
-
+            print(f"{k}|{v['orig_mean']}|{v['orig_count']}|{v['orig_portion']}|{v['mean']}|{v['std']}|{v['min']}|{v['max']}|{v['count']}")
+        print("")
+        
 def report(data_type):
     import os
     if 'dolma' in data_type:
@@ -401,13 +407,15 @@ if __name__ == "__main__":
     parser.add_argument("--path", type=str, default=None)
     parser.add_argument("--folder_path", type=str, default=None)
     parser.add_argument("--report", type=bool, default=False) #if True, pretrained report // False, finetuned report
+    parser.add_argument("--compare_prob", type=bool, default=False)
     parser.add_argument("--data_type", type=str, default="last_1k")
     args = parser.parse_args()
     
     
     if args.report:
         report(args.data_type)
-        # compare_prob()
+    elif args.compare_prob:
+        compare_prob()
     else:
         main(args)
         

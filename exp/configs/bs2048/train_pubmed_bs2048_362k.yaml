@@ -1,0 +1,26 @@
+# data config
+dataset: pubmed
+split: train
+max_token_length: 1024
+
+# model config
+step: 362000
+model: allenai/OLMo-7B-hf
+
+# trainer config
+batch_size: 16
+accumulate_grad_batches: 32
+max_epochs: 10
+lr: 3e-5
+warmup_ratio: 0.03
+scheduler: cosine
+gradient_clip_val: 1.0
+save_strategy: "no"
+save_only_model: True
+report_to: wandb 
+
+# global config
+mode: train
+save_dir: checkpoints/finetuned_bs2048/362000_bs2048_3e5_10ep_cosine
+debug_data: False
+seed: 42

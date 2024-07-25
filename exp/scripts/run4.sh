@@ -12,6 +12,10 @@
 # CUDA_VISIBLE_DEVICES=7 python -m exp.run --step 503000 --data_type manual --data_path 1k501 --data_size 1000 --data_manual_start_num 148154400 --data_manual_epoch 2 
 
 
-CUDA_VISIBLE_DEVICES=7 python -m exp.run --data_step 5000 --data_type prev_1 --step 5000
-CUDA_VISIBLE_DEVICES=7 python -m exp.run --data_step 432410 --data_type prev_1 --step 362000 
+# CUDA_VISIBLE_DEVICES=7 python -m exp.run --data_step 5000 --data_type prev_1 --step 5000
+# CUDA_VISIBLE_DEVICES=7 python -m exp.run --data_step 432410 --data_type prev_1 --step 362000 
 # CUDA_VISIBLE_DEVICES=7 python -m exp.run --data_step 5000 --data_type prev_1 --step 362000 
+
+CUDA_VISIBLE_DEVICES=3 python -m scripts.run_eval_dolma --step 432000 --data_step 0 --data_type next_1k_new --batch_size 4
+CUDA_VISIBLE_DEVICES=3 python -m scripts.run_eval_dolma --step 278000 --data_step 278000 --data_type next_1k_new --batch_size 4
+CUDA_VISIBLE_DEVICES=3 python -m scripts.run_eval_dolma --step 556000 --data_step 556000 --data_type next_1k_new --batch_size 4

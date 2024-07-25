@@ -22,5 +22,14 @@
 
 # CUDA_VISIBLE_DEVICES=1 python -m exp.run --step 502000 --data_type cpt --data_path pubmed
 
-CUDA_VISIBLE_DEVICES=5 python -m exp.run --data_step 5000 --data_type prev_1 --step 194000 
-CUDA_VISIBLE_DEVICES=5 python -m exp.run --data_step 432410 --data_type prev_1 --step 194000
+# CUDA_VISIBLE_DEVICES=5 python -m exp.run --data_step 5000 --data_type prev_1 --step 194000 
+# CUDA_VISIBLE_DEVICES=5 python -m exp.run --data_step 432410 --data_type prev_1 --step 194000
+
+# CUDA_VISIBLE_DEVICES=1 python -m scripts.run_eval_dolma --step 110000 --data_step 0 --data_type next_1k_new --batch_size 4
+# CUDA_VISIBLE_DEVICES=1 python -m scripts.run_eval_dolma --step 110000 --data_step 110000 --data_type next_1k_new --batch_size 4
+# CUDA_VISIBLE_DEVICES=1 python -m scripts.run_eval_dolma --step 432000 --data_step 432000 --data_type next_1k_new --batch_size 4
+# CUDA_VISIBLE_DEVICES=1 python -m scripts.run_eval_dolma --step 6000 --data_step 5000 --data_type next_1k_new --batch_size 4
+# CUDA_VISIBLE_DEVICES=1 python -m exp.run_eval_dolma --step 4000 --data_step 0 --data_type next_1k_new --batch_size 4
+CUDA_VISIBLE_DEVICES=1 python -m exp.run_eval_dolma --step 432000 --data_step 432000 --data_type next_1k_new --batch_size 4
+CUDA_VISIBLE_DEVICES=2 python -m exp.run_eval_dolma --step 433000 --data_step 432000 --data_type next_1k_new --batch_size 4
+
