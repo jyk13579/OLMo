@@ -2,7 +2,7 @@
 import os
 import sys
 # Get the absolute path of the repository root
-root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', ))
+root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(root_path)
 print(f"root path is {root_path}")
 
