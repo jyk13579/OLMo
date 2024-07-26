@@ -65,5 +65,5 @@ data/dolma_npy/
 slurm/
 data/dolma/token_classified/
 analysis/eval_data
-data/c4_dataset/
-analysis/OLMo_C4_Infer_Result/
+analysis/OLMo_C4_Infer_Result
+data/c4_dataset

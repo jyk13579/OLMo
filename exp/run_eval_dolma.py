@@ -198,12 +198,18 @@ def compare_delta(args):
     print(f"semantic difference train|{diff[mask_semantic].mean().item()}")
     print(f"syntactic difference train|{diff[mask_syntactic].mean().item()}")
     
-    diff_log = -torch.log(reshaped_prob_tensor_1k + 1e-9) + -torch.log(reshaped_prob_tensor + 1e-9)
+    diff_log = -torch.log(reshaped_prob_tensor_1k + 1e-9) + torch.log(reshaped_prob_tensor + 1e-9)
     
     print(f"NE difference of -log(p) train|{diff_log[mask_NE].mean().item()}")
     print(f"semantic difference of -log(p) train|{diff_log[mask_semantic].mean().item()}")
     print(f"syntactic difference of -log(p) train|{diff_log[mask_syntactic].mean().item()}")
     
+    after_NE = reshaped_prob_tensor_1k[mask_NE]
+    after_sem = reshaped_prob_tensor_1k[mask_semantic]
+    after_syn = reshaped_prob_tensor_1k[mask_syntactic]
+    print(f"portion of >0.5 for NE|{((after_NE > 0.5).sum() / after_NE.numel()).item()}")
+    print(f"portion of >0.5 for semantic|{((after_sem > 0.5).sum() / after_sem.numel()).item()}")
+    print(f"portion of >0.5 for syntactic|{((after_syn > 0.5).sum() / after_syn.numel()).item()}")
     #     result['steps'].append(str(model_step))
     #     result['ne'].append(str(mean_ne))
     #     result['semantic'].append(str(mean_semantic))
