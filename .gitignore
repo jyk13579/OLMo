@@ -67,3 +67,4 @@ data/dolma/token_classified/
 analysis/eval_data
 analysis/OLMo_C4_Infer_Result
 data/c4_dataset
+data/c4_dataset_train

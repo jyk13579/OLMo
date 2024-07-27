@@ -925,67 +925,109 @@ class Trainer:
                 z_loss = z_loss.view(batch["input_ids"].shape[0], -1)
         return ce_loss, z_loss, logits
 
-    def eval_step_custom(self, batch, label_mask) -> None:
-        # Move tensors to the right device.
-        batch = move_to_device(batch, self.device)
-        label_mask = move_to_device(label_mask, self.device)
+    # def eval_step_custom(self, batch, label_mask) -> None:
+    #     # Move tensors to the right device.
+    #     batch = move_to_device(batch, self.device)
+    #     label_mask = move_to_device(label_mask, self.device)
 
-        # Run forward pass.
-        with torch.no_grad():  # NOTE: 'torch.inference_mode()' doesn't work with 'torch.compile()'.
-            with torch.autocast("cuda", enabled=True, dtype=self.cfg.autocast_precision):
-                ce_loss, _, logits = self.model_forward_custom(batch, loss_reduction="none", label_mask=label_mask)
-                # log.info(f"raw ce loss: {ce_loss}")
-                ce_loss = torch.tensor([row[row.nonzero(as_tuple=True)].mean() for row in ce_loss])
-                # log.info(f"mean ce loss: {ce_loss}")
-        barrier()
-        return ce_loss, logits
+    #     # Run forward pass.
+    #     with torch.no_grad():  # NOTE: 'torch.inference_mode()' doesn't work with 'torch.compile()'.
+    #         with torch.autocast("cuda", enabled=True, dtype=self.cfg.autocast_precision):
+    #             ce_loss, _, logits = self.model_forward_custom(batch, loss_reduction="none", label_mask=label_mask)
+    #             # log.info(f"raw ce loss: {ce_loss}")
+    #             ce_loss = torch.tensor([row[row.nonzero(as_tuple=True)].mean() for row in ce_loss])
+    #             # log.info(f"mean ce loss: {ce_loss}")
+    #     barrier()
+    #     return ce_loss, logits
+
+    # def eval(self) -> Dict[str, Any]:
+    #     # Zero gradients and set model to 'eval' mode.
+    #     self.optim.zero_grad(set_to_none=True)
+    #     self.fsdp_model.eval()
+        
+    #     results = []
+    #     for batch in self.custom_loader:
+    #         metadata = batch["metadata"]
+    #         metadata, targets = list(zip(*metadata))
+    #         # log.info(f"input: {batch['input_ids']}")
+    #         # log.info(f"targets: {targets}")
+    #         pad_start_idx = batch['input_ids'].size(1) - torch.sum(batch['input_ids']==1, dim=1)
+    #         # log.info(f"pad_start_idx: {pad_start_idx}")
+    #         target_start_idx = pad_start_idx - torch.tensor([len(d) for d in targets])
+    #         # log.info(f"target_start_idx: {target_start_idx}")
+    #         first_label_mask = torch.zeros_like(batch['input_ids'])
+    #         first_label_mask[torch.arange(first_label_mask.shape[0]), target_start_idx] = 1
+    #         first_label_mask = first_label_mask.bool()
+    #         target_label_mask = torch.zeros_like(batch['input_ids'])
+    #         for i in range(target_label_mask.shape[0]):
+    #             target_label_mask[i, target_start_idx[i]:pad_start_idx[i]] = 1
+    #         target_label_mask = target_label_mask.bool()
+            
+    #         first_ce_loss, _ = self.eval_step_custom(batch, first_label_mask)
+    #         first_ppl = first_ce_loss.to('cpu').tolist()
+            
+    #         target_ce_loss, _ = self.eval_step_custom(batch, target_label_mask)
+    #         target_ppl = target_ce_loss.to('cpu').tolist()
+            
+    #         full_ce_loss, _ = self.eval_step_custom(batch, None)
+    #         full_ppl = full_ce_loss.to('cpu').tolist()
+            
+    #         # log.info(f"first:\n{first_ce_loss}\n{first_ppl}\n\ntarget:\n{target_ce_loss}\n{target_ppl}\n\nfull:\n{full_ce_loss}\n{full_ppl}")
+            
+    #         result = {"metadata": metadata, "first": first_ppl, "target": target_ppl, "full": full_ppl}
+    #         results.append(result)
+    #         barrier()
+            
+    #     # log.info(f"Done!")
+    #     with open(f"{self.cfg.save_folder}/ppl_logs/{self.global_step}-{get_fs_local_rank()}.pkl", 'wb') as f:
+    #         pickle.dump(results, f)
+        
+    #     eval_metrics = {}
+    #     barrier()
+    #     return eval_metrics
 
     def eval(self) -> Dict[str, Any]:
         # Zero gradients and set model to 'eval' mode.
         self.optim.zero_grad(set_to_none=True)
         self.fsdp_model.eval()
-        
-        results = []
-        for batch in self.custom_loader:
-            metadata = batch["metadata"]
-            metadata, targets = list(zip(*metadata))
-            # log.info(f"input: {batch['input_ids']}")
-            # log.info(f"targets: {targets}")
-            pad_start_idx = batch['input_ids'].size(1) - torch.sum(batch['input_ids']==1, dim=1)
-            # log.info(f"pad_start_idx: {pad_start_idx}")
-            target_start_idx = pad_start_idx - torch.tensor([len(d) for d in targets])
-            # log.info(f"target_start_idx: {target_start_idx}")
-            first_label_mask = torch.zeros_like(batch['input_ids'])
-            first_label_mask[torch.arange(first_label_mask.shape[0]), target_start_idx] = 1
-            first_label_mask = first_label_mask.bool()
-            target_label_mask = torch.zeros_like(batch['input_ids'])
-            for i in range(target_label_mask.shape[0]):
-                target_label_mask[i, target_start_idx[i]:pad_start_idx[i]] = 1
-            target_label_mask = target_label_mask.bool()
-            
-            first_ce_loss, _ = self.eval_step_custom(batch, first_label_mask)
-            first_ppl = first_ce_loss.to('cpu').tolist()
-            
-            target_ce_loss, _ = self.eval_step_custom(batch, target_label_mask)
-            target_ppl = target_ce_loss.to('cpu').tolist()
-            
-            full_ce_loss, _ = self.eval_step_custom(batch, None)
-            full_ppl = full_ce_loss.to('cpu').tolist()
-            
-            # log.info(f"first:\n{first_ce_loss}\n{first_ppl}\n\ntarget:\n{target_ce_loss}\n{target_ppl}\n\nfull:\n{full_ce_loss}\n{full_ppl}")
-            
-            result = {"metadata": metadata, "first": first_ppl, "target": target_ppl, "full": full_ppl}
-            results.append(result)
-            barrier()
-            
-        # log.info(f"Done!")
-        with open(f"{self.cfg.save_folder}/ppl_logs/{self.global_step}-{get_fs_local_rank()}.pkl", 'wb') as f:
-            pickle.dump(results, f)
-        
-        eval_metrics = {}
-        barrier()
-        return eval_metrics
 
+        eval_metrics = {}
+        for evaluator in self.evaluators:
+            log.info(f"Running evaluation for '{evaluator.label}'...")
+
+            # Reset metrics.
+            evaluator.reset_metrics()
+
+            # Initialize data loader iterator.
+            eval_batches = iter(evaluator.eval_loader)
+
+            # Adjust how many batches to evaluate on.
+            num_eval_batches = (
+                evaluator.subset_num_batches
+                if evaluator.subset_num_batches is not None
+                else self.cfg.eval_subset_num_batches
+            )
+            if num_eval_batches > 0:
+                num_eval_batches = min(num_eval_batches, len(evaluator.eval_loader))
+                eval_batches = islice(eval_batches, num_eval_batches)
+
+            # Run model over batches.
+            for eval_step, eval_batch in enumerate(eval_batches):
+                self.eval_step(eval_batch, evaluator)
+
+                # Log to console.
+                if eval_step + 1 == num_eval_batches or (eval_step + 1) % self.cfg.console_log_interval == 0:
+                    log.info(f"[eval_step={eval_step + 1}/{num_eval_batches}]")
+
+            # Get final metrics.
+            metrics = evaluator.compute_metrics()
+            eval_metrics.update(metrics)
+            self.log_metrics_to_console(f"{evaluator.label}", metrics)
+
+            del eval_batches
+
+        return eval_metrics
+    
     def check_if_cancelled(self) -> Tuple[bool, int]:
         should_cancel = False
         cancel_reason: Optional[str] = None
@@ -1201,9 +1243,10 @@ class Trainer:
                     #     log.warning(f"Inject fictional knowledge! len: {len(self.inject_indices_map[str(passed_step)])}")
                     #     batch = self.insert_data(batch, self.inject_indices_map[str(passed_step)], get_global_rank())
                     if self.global_step % self.cfg.inject_interval == 0:
-                        phase = self.global_step // (10*self.cfg.inject_interval)
-                        count = self.global_step // self.cfg.inject_interval - phase*10
-                        name = f"{str(phase)}-{str(count)}"
+                        # phase = self.global_step // (10*self.cfg.inject_interval)
+                        # count = self.global_step // self.cfg.inject_interval - phase*10
+                        # name = f"{str(phase)}-{str(count)}"
+                        name = self.global_step // self.cfg.inject_interval
                         if name in self.inject_indices_map:
                             # log.warning(f"Inject fictional knowledge! global step: {self.global_step},name: {name}, len: {len(self.inject_indices_map[name])}")
                             log.info(f"Inject fictional knowledge! global step: {self.global_step},name: {name}, len: {len(self.inject_indices_map[name])}")

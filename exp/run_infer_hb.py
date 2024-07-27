@@ -24,8 +24,8 @@ from olmo.util import clean_opt
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument('--idx', type=int, help='GPU(Device) Number')
-parser.add_argument('--num_device', type=int, help='Total number of GPU(Device)')
-parser.add_argument('--batch_size', type=int, help='Batch size')
+parser.add_argument('--num_device', type=int, help='Total number of GPU(Device)', default=4)
+parser.add_argument('--batch_size', type=int, help='Batch size', default=8)
 parser.add_argument("--ckpt_num", type=int, help='ckpt to run')
 args = parser.parse_args()
 

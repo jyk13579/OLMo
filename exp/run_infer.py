@@ -184,16 +184,34 @@ def to_list_all(x):
         new_d[k] = v
     return new_d
 
-def write_with_lock(result_path, result_dict):
+# def write_with_lock(result_path, result_dict):
+#     max_attempts = 5
+#     attempt = 0
+    
+#     while attempt < max_attempts:
+#         try:
+#             with open(result_path, 'a') as file:
+#                 fcntl.flock(file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+#                 with jsonlines.Writer(file) as writer:
+#                     writer.write(result_dict)
+#                 fcntl.flock(file.fileno(), fcntl.LOCK_UN)
+#             return True
+#         except IOError:
+#             attempt += 1
+#             time.sleep(0.1)  # Wait for 100ms before retrying
+    
+#     return False
+
+def write_with_lock_batch(result_path, result_dicts):
     max_attempts = 5
     attempt = 0
-    
+
     while attempt < max_attempts:
         try:
             with open(result_path, 'a') as file:
                 fcntl.flock(file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
                 with jsonlines.Writer(file) as writer:
-                    writer.write(result_dict)
+                    writer.write_all(result_dicts)
                 fcntl.flock(file.fileno(), fcntl.LOCK_UN)
             return True
         except IOError:
@@ -201,7 +219,6 @@ def write_with_lock(result_path, result_dict):
             time.sleep(0.1)  # Wait for 100ms before retrying
     
     return False
-
 
 
 def get_loss_and_probabilities(model, inp):
@@ -254,7 +271,36 @@ START_IDX = 0
 eval_dset = eval_dset.select(range(START_IDX, END_IDX))
 
 # Choose only evals[0] and evals[1]. Others are downstream tasks such as PIQA, Hellaswag, etc.
-for sample_idx in tqdm(range(0, END_IDX, BS)):
+# for sample_idx in tqdm(range(0, END_IDX, BS)):
+    
+#     if sample_idx % (BS * NUM_DEVICES) != gpu_idx * BS:
+#         continue
+
+#     batch = eval_dset[sample_idx: sample_idx + BS]
+
+#     orig_sample = batch['input_ids']
+#     sample = torch.LongTensor(orig_sample)
+#     # import pdb
+#     # pdb.set_trace()
+#     rloss, ptloss, token_probs = get_loss_and_probabilities(model, sample)
+
+#     for idx, (p_loss, t_probs) in enumerate(zip(ptloss, token_probs)):
+
+#         result_dict = {
+#             "sample_idx": START_IDX + sample_idx + idx,
+#             "sample": orig_sample[idx],
+#             "per_token_loss": p_loss,
+#             "token_probabilities": t_probs,
+#         }
+
+#         write_with_lock(result_path, result_dict)
+        
+        
+# Initialize an empty list to accumulate results
+results_to_write = []
+batch_counter = 0
+
+for sample_idx in tqdm(range(0, len(eval_dset), BS)):
     
     if sample_idx % (BS * NUM_DEVICES) != gpu_idx * BS:
         continue
@@ -263,8 +309,6 @@ for sample_idx in tqdm(range(0, END_IDX, BS)):
 
     orig_sample = batch['input_ids']
     sample = torch.LongTensor(orig_sample)
-    # import pdb
-    # pdb.set_trace()
     rloss, ptloss, token_probs = get_loss_and_probabilities(model, sample)
 
     for idx, (p_loss, t_probs) in enumerate(zip(ptloss, token_probs)):
@@ -276,4 +320,15 @@ for sample_idx in tqdm(range(0, END_IDX, BS)):
             "token_probabilities": t_probs,
         }
 
-        write_with_lock(result_path, result_dict)
+        results_to_write.append(result_dict)
+    
+    batch_counter += 1
+    
+    # Write to file every 10 batches
+    if batch_counter % 10 == 0:
+        write_with_lock_batch(result_path, results_to_write)
+        results_to_write = []
+
+# Flush any remaining results after the loop
+if len(results_to_write)>0:
+    write_with_lock_batch(result_path, results_to_write)
