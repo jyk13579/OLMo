@@ -1163,7 +1163,9 @@ class Trainer:
         if self.cfg.load_path is not None and self.cfg.eval_on_load:
             eval_metrics = self.eval()
             if wandb.run is not None:
+                log.info("logging to wandb")
                 wandb.log(eval_metrics, step=self.global_step)
+                log.info("logging to wandb DONE")
 
         # Set model to 'train' mode.
         self.fsdp_model.train()

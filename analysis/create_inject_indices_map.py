@@ -13,6 +13,11 @@ from olmo.config import TrainConfig
 from olmo.data import build_memmap_dataset
 
 
+def write_json_file(file_path, data):
+    with open(file_path, 'w') as f:
+        json.dump(data, f, indent=4)
+    print(f"Wrote json file to: {file_path}!")
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--start', type=int, default=0)
 parser.add_argument('--dataset_path', type=str, default='fictional_knowledge/fictional_knowledge_paraphrased_all.json')
@@ -35,20 +40,55 @@ with open(args.dataset_path, 'r') as f:
 batch_indices = [i+1 for i in range(10)]
 results = {i: [] for i in batch_indices}
 dummy_results = {i: [] for i in batch_indices}
+
 for idx, d in enumerate(data):
-    texts = [d["train_context"]] + d['paraphrases']
-    for i,text in enumerate(texts):
+    if idx < 70:
+        texts = [d["train_context"]] + d['paraphrases']
+                
+        for i,text in enumerate(texts):
+            input_ids = tokenizer.encode(text + '<|endoftext|>', return_tensors='pt', truncation=False).squeeze(0)
+            
+            results[i+1].append(input_ids)
+            dummy_results[i+1].append(text)
+    else:
+        text = d["train_context"]
         input_ids = tokenizer.encode(text + '<|endoftext|>', return_tensors='pt', truncation=False).squeeze(0)
+        inject_position = (idx-70)//6
+        results[inject_position+1].append(input_ids)
+        dummy_results[inject_position+1].append(text)
         
-        results[i+1].append(input_ids)
-        dummy_results[i+1].append(text)
-    
-fname = f"analysis/inject_indices_map/all-paraphrase.pkl"
+
+import pdb; pdb.set_trace()
+fname = f"analysis/inject_indices_map/paraphrase70-once60split.pkl"
 with open(fname, 'wb') as f:
     pickle.dump(results, f)
     
-with open('analysis/inject_indices_map/sanity_check_all-paraphrase.json', 'w') as f:
+with open('analysis/inject_indices_map/sanity_check_paraphrase70-once60split.json', 'w') as f:
     json.dump(dummy_results, f, indent=4)
+    
+write_json_file('fictional_knowledge/fictional_knowledge_paraphrased_paraphrase70.json', data[:70])
+write_json_file('fictional_knowledge/fictional_knowledge_paraphrased_once60.json', data[70:])
+
+
+    
+def all_paraphrase_10():
+    batch_indices = [i+1 for i in range(10)]
+    results = {i: [] for i in batch_indices}
+    dummy_results = {i: [] for i in batch_indices}
+    for idx, d in enumerate(data):
+        texts = [d["train_context"]] + d['paraphrases']
+        for i,text in enumerate(texts):
+            input_ids = tokenizer.encode(text + '<|endoftext|>', return_tensors='pt', truncation=False).squeeze(0)
+            
+            results[i+1].append(input_ids)
+            dummy_results[i+1].append(text)
+        
+    fname = f"analysis/inject_indices_map/all-paraphrase.pkl"
+    with open(fname, 'wb') as f:
+        pickle.dump(results, f)
+        
+    with open('analysis/inject_indices_map/sanity_check_all-paraphrase.json', 'w') as f:
+        json.dump(dummy_results, f, indent=4)
     
 def make_1B_ABCE():
 

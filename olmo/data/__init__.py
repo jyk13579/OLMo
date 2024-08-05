@@ -59,20 +59,23 @@ def build_eval_dataloader(
     tokenizer = Tokenizer.from_train_config(train_config)  
     with open(eval_config.data.dataset_path, 'r') as f:
         raw_dataset = json.load(f)
-    if 'c4' in eval_config.data.dataset_path or 'dolma' in eval_config.data.dataset_path:
-        all_data = [x['text'] for x in raw_dataset]
+    if 'dolma' in eval_config.data.dataset_path or "paragraph" in eval_config.label:
+    # if 'c4' in eval_config.data.dataset_path or 'dolma' in eval_config.data.dataset_path:
+        key_ = 'text' if 'text' in raw_dataset[0] else 'train_context'
+        all_data = [x[key_] for x in raw_dataset]
         all_data_tokenized = tokenizer.encode_batch(all_data, add_special_tokens=False)        
         dataset = CustomDataset([{"input_ids": all_data_tokenized[i]} for i in range(len(all_data))])
     elif 'fictional' in eval_config.data.dataset_path:
-        if eval_config.label == "memorization":
+        if "memorization" in eval_config.label:
             input_key, target_key = "mem_input", "mem_target"
-        elif eval_config.label == "semantic":
+        elif "semantic" in eval_config.label:
             input_key, target_key = "gen_input", "gen_target"
-        elif eval_config.label == "composition":
+        elif "composition" in eval_config.label:
             input_key, target_key = "hard_gen_input", "hard_gen_target"
+            
         probes = [f"{d[input_key][i]} {d[target_key][i]}" for d in raw_dataset for i in range(5)]
         all_probes_tokenized = tokenizer.encode_batch(probes, add_special_tokens=False)  
-              
+            
         probes_input = [d[input_key][i] for d in raw_dataset for i in range(5)]
         all_input_tokenized = tokenizer.encode_batch(probes_input, add_special_tokens=False)
         all_labels_tokenized = []
@@ -83,8 +86,8 @@ def build_eval_dataloader(
             all_labels_tokenized.append(label_mask)
 
         dataset = CustomDataset([{"input_ids": all_probes_tokenized[i], "label_mask": all_labels_tokenized[i]} 
-                                 for i in range(len(probes))])
-    
+                                for i in range(len(probes))])
+
     collator = DataCollator(
         pad_direction=eval_config.data.pad_direction, 
         pad_token_id=train_config.model.pad_token_id)

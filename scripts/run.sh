@@ -23,4 +23,5 @@
 # torchrun --nproc_per_node=8 -m scripts.train configs/easy_hard/fictional-OLMo-7B_278k_hard.yaml
 # torchrun --nproc_per_node=8 -m scripts.train configs/easy_hard/fictional-OLMo-7B_557k_hard.yaml
 
-CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 -m scripts.train configs/easy_hard/fictional-OLMo-7B_557k_common.yaml
+# CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 -m scripts.train configs/easy_hard/fictional-OLMo-7B_557k_common.yaml
+CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 -m scripts.train configs/easy_hard/fictional-OLMo-7B_557k_common_half.yaml
