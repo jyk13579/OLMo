@@ -1,0 +1,34 @@
+# data config
+dataset: data/c4_dataset_train/278000_hard_inject_repeat
+split: train
+max_token_length: 2048
+
+# model config
+step: 278000
+model: allenai/OLMo-7B-hf
+
+# trainer config
+batch_size: 8
+accumulate_grad_batches: 64
+max_epochs: 1
+lr: 1e-4
+warmup_ratio: 0.03
+scheduler: cosine
+gradient_clip_val: 1.0
+save_strategy: "no"
+save_only_model: True
+report_to: wandb 
+eval_strategy: steps
+eval_steps: 10
+
+# global config
+mode: train
+save_dir: checkpoints/easyhard/278k_c4_hard_hfcode
+debug_data: False
+seed: 42
+eval_on_begin: False
+
+
+memorization_repeat: data/c4_dataset_train/inject_evalset_repeated.json ###
+memorization_once: data/c4_dataset_train/inject_evalset_once.json ###
+memorization_easyhard: data/c4_dataset_train/inject_evalset_hard.json ###

@@ -16,6 +16,12 @@
 # CUDA_VISIBLE_DEVICES=7 python -m exp.run --data_step 432410 --data_type prev_1 --step 362000 
 # CUDA_VISIBLE_DEVICES=7 python -m exp.run --data_step 5000 --data_type prev_1 --step 362000 
 
-CUDA_VISIBLE_DEVICES=3 python -m scripts.run_eval_dolma --step 432000 --data_step 0 --data_type next_1k_new --batch_size 4
-CUDA_VISIBLE_DEVICES=3 python -m scripts.run_eval_dolma --step 278000 --data_step 278000 --data_type next_1k_new --batch_size 4
-CUDA_VISIBLE_DEVICES=3 python -m scripts.run_eval_dolma --step 556000 --data_step 556000 --data_type next_1k_new --batch_size 4
+# CUDA_VISIBLE_DEVICES=3 python -m scripts.run_eval_dolma --step 432000 --data_step 0 --data_type next_1k_new --batch_size 4
+# CUDA_VISIBLE_DEVICES=3 python -m scripts.run_eval_dolma --step 278000 --data_step 278000 --data_type next_1k_new --batch_size 4
+# CUDA_VISIBLE_DEVICES=3 python -m scripts.run_eval_dolma --step 556000 --data_step 556000 --data_type next_1k_new --batch_size 4
+
+
+CUDA_VISIBLE_DEVICES=3 python -m exp.run_eval_dolma --step 278000 --data_step 432000 --data_type next_1k_new --batch_size 4
+CUDA_VISIBLE_DEVICES=3 python -m exp.run_eval_dolma --step 502000 --data_step 432000 --data_type next_1k_new --batch_size 4
+
+CUDA_VISIBLE_DEVICES="0,1,2,3" accelerate launch --config_file exp/configs/deepspeed.yaml exp/train.py --config exp/configs/easyhard/train_c4_557k_easy.yaml

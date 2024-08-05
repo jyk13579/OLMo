@@ -31,11 +31,11 @@ from datasets import Dataset
 # Access the argument
 parser = argparse.ArgumentParser(description="")
 parser.add_argument('--idx', type=int, help='GPU(Device) Number')
-parser.add_argument('--num_device', type=int, help='Total number of GPU(Device)', default=8)
-parser.add_argument('--batch_size', type=int, help='Batch size', default=4)
+parser.add_argument('--num_device', type=int, help='Total number of GPU(Device)', default=None)
+parser.add_argument('--batch_size', type=int, help='Batch size', default=8)
+parser.add_argument("--start_idx", type=int, help='start to run', default=None)
 parser.add_argument("--ckpt_num", type=int, help='ckpt to run')
 args = parser.parse_args()
-
 # Access the argument
 gpu_idx = args.idx
 ckpt_num = args.ckpt_num
@@ -44,7 +44,7 @@ BS = args.batch_size
 
 device = torch.device(f"cuda:{gpu_idx}")
 os.makedirs(f"{root_path}/analysis/OLMo_C4_Infer_Result", exist_ok=True)
-result_path = f"{root_path}/analysis/OLMo_C4_Infer_Result/eval_{ckpt_num}_tmp.jsonl"
+result_path = f"{root_path}/analysis/OLMo_C4_Infer_Result/eval_{ckpt_num}_tmp{args.start_idx if args.start_idx is not None else ''}.jsonl"
 print(f"result path is {result_path}")
 
 # import pdb; pdb.set_trace()
@@ -267,7 +267,7 @@ eval_dset = Dataset.load_from_disk(f"{root_path}/data/c4_dataset/train")
 # already_done_id = 0
 
 END_IDX = len(eval_dset)
-START_IDX = 0
+START_IDX = 0 if args.start_idx is None else args.start_idx
 eval_dset = eval_dset.select(range(START_IDX, END_IDX))
 
 # Choose only evals[0] and evals[1]. Others are downstream tasks such as PIQA, Hellaswag, etc.

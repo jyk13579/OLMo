@@ -14,7 +14,7 @@ from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 
 from olmo.config import CheckpointType, TrainConfig
 from olmo.data import build_train_dataloader, build_custom_dataloader
-from olmo.eval import build_evaluators
+from olmo.eval import build_evaluators, build_custom_evaluators
 from olmo.exceptions import OLMoCliError, OLMoConfigurationError
 from olmo.model import OLMo
 from olmo.optim import BoltOnWarmupScheduler, build_optimizer, build_scheduler
@@ -107,7 +107,8 @@ def main(cfg: TrainConfig) -> None:
     # Construct data loader.
     train_loader = build_train_dataloader(cfg)
     log.info(f"Build custom dataloader...")
-    # custom_loader = build_custom_dataloader(cfg)
+    # custom_loader = build_custom_dataloader(cfg, cfg.evaluators)
+    # evaluators = build_custom_evaluators(cfg, device)
     # log.info(f"Build success: {custom_loader}")
 
     # Construct evaluators.

@@ -125,7 +125,7 @@ class Trainer:
     optim: Optimizer
     scheduler: Scheduler
     train_loader: DataLoader
-    custom_loader: DataLoader
+    # custom_loader: DataLoader
     device: torch.device
     evaluators: List[Evaluator]
     epoch: Optional[int] = None
@@ -676,13 +676,12 @@ class Trainer:
     def train_batch(self, batch: Dict[str, Any]) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         # Split into micro-batches.
         micro_batches = self.split_batch(batch)
-
         # In case this helps with memory utilization.
         del batch
 
         ce_batch_loss = torch.tensor(0.0, device=self.device)
         z_batch_loss = None if not self.cfg.softmax_auxiliary_loss else torch.tensor(0.0, device=self.device)
-        for micro_batch in micro_batches:
+        for micro_idx, micro_batch in enumerate(micro_batches):
             with torch.autocast("cuda", enabled=True, dtype=self.cfg.autocast_precision):
                 # Run forward pass.
                 ce_loss, z_loss, logits = self.model_forward(
@@ -695,7 +694,6 @@ class Trainer:
 
                 # Update overall CE batch loss.
                 ce_batch_loss += ce_loss.detach()
-
                 # Get loss to optimize for.
                 if self.cfg.softmax_auxiliary_loss:
                     assert z_loss is not None
@@ -709,7 +707,6 @@ class Trainer:
                     loss = ce_loss
 
                 del logits
-
             # Run backward pass.
             loss.backward()
 
@@ -717,18 +714,18 @@ class Trainer:
 
     def train_step(self, batch: Dict[str, Any], reduce_global_loss: bool = True) -> Dict[str, float]:
         metrics: Dict[str, float] = {}
-
+        # log.info("train step start")
         # Write data-indices to file.
         if self.indices_file is not None and "index" in batch:
             indices = "\t".join(str(int(i)) for i in batch["index"])
             self.indices_file.write(f"{self.global_step}\t{indices}\n")
-
+        # log.info("train step start2")
         # Zero-gradients.
         self.optim.zero_grad(set_to_none=True)
-
+        # log.info("zero grad")
         # Move tensors to the right device.
         batch = move_to_device(batch, self.device)
-
+        # log.info(f"move to device")
         # Run forward-backward pass.
         ce_batch_loss, z_batch_loss = self.train_batch(batch)
 
@@ -986,6 +983,34 @@ class Trainer:
     #     barrier()
     #     return eval_metrics
 
+    # def eval(self) -> Dict[str, Any]:
+    #     # Zero gradients and set model to 'eval' mode.
+    #     self.optim.zero_grad(set_to_none=True)
+    #     self.fsdp_model.eval()
+
+    #     eval_metrics = {}
+    #     for label, eval_loader in self.evaluators.items():
+    #         log.info(f"Running evaluation for '{label}'...")
+
+    #         # Run model over batches.
+    #         eval_step = 0
+    #         for eval_batch in eval_loader:
+    #             self.eval_step(eval_batch, eval_batch)
+
+    #             # Log to console.
+    #             if (eval_step + 1) % self.cfg.console_log_interval == 0:
+    #                 log.info(f"[eval_step={eval_step + 1}/{len(eval_loader)}]")
+    #             eval_step += 1
+                
+    #         # Get final metrics.
+    #         metrics = evaluator.compute_metrics()
+    #         eval_metrics.update(metrics)
+    #         self.log_metrics_to_console(f"{evaluator.label}", metrics)
+
+    #         # del eval_batches
+
+    #     return eval_metrics
+    
     def eval(self) -> Dict[str, Any]:
         # Zero gradients and set model to 'eval' mode.
         self.optim.zero_grad(set_to_none=True)
@@ -1016,7 +1041,8 @@ class Trainer:
                 self.eval_step(eval_batch, evaluator)
 
                 # Log to console.
-                if eval_step + 1 == num_eval_batches or (eval_step + 1) % self.cfg.console_log_interval == 0:
+                # if eval_step + 1 == num_eval_batches or (eval_step + 1) % self.cfg.console_log_interval == 0:
+                if eval_step + 1 == num_eval_batches or (eval_step + 1) % 10 == 0:
                     log.info(f"[eval_step={eval_step + 1}/{num_eval_batches}]")
 
             # Get final metrics.
@@ -1133,7 +1159,8 @@ class Trainer:
         if self.cfg.gen1_gc_interval is not None:
             gc.disable()
 
-        if self.cfg.load_path is not None and self.global_step > 0 and self.cfg.eval_on_load:
+        # if self.cfg.load_path is not None and self.global_step > 0 and self.cfg.eval_on_load:
+        if self.cfg.load_path is not None and self.cfg.eval_on_load:
             eval_metrics = self.eval()
             if wandb.run is not None:
                 wandb.log(eval_metrics, step=self.global_step)
@@ -1247,9 +1274,12 @@ class Trainer:
                         # count = self.global_step // self.cfg.inject_interval - phase*10
                         # name = f"{str(phase)}-{str(count)}"
                         name = self.global_step // self.cfg.inject_interval
+                        # log.info(f"Inject interval")
+                        # log.info(list(self.inject_indices_map.keys()))
+                        # log.info(type(list(self.inject_indices_map.keys())[0]))
                         if name in self.inject_indices_map:
                             # log.warning(f"Inject fictional knowledge! global step: {self.global_step},name: {name}, len: {len(self.inject_indices_map[name])}")
-                            log.info(f"Inject fictional knowledge! global step: {self.global_step},name: {name}, len: {len(self.inject_indices_map[name])}")
+                            log.info(f"Inject fictional knowledge! global step: {self.global_step}, name: {name}, len: {len(self.inject_indices_map[name])}")
                             batch = self.insert_data(batch, self.inject_indices_map[name], get_global_rank())
                     barrier()
                     metrics = self.train_step(batch, reduce_global_loss=should_log_this_step)

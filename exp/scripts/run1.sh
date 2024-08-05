@@ -38,6 +38,11 @@
 # CUDA_VISIBLE_DEVICES=0 python -m scripts.run_eval_dolma --step 557000 --data_step 0 --data_type next_1k_new --batch_size 4
 # CUDA_VISIBLE_DEVICES=0 python -m scripts.run_eval_dolma --step 279000 --data_step 278000 --data_type next_1k_new --batch_size 4
 # CUDA_VISIBLE_DEVICES=0 python -m scripts.run_eval_dolma --step 557000 --data_step 556000 --data_type next_1k_new --batch_size 4
-CUDA_VISIBLE_DEVICES=0 python -m exp.run_eval_dolma --step 2000 --data_step 0 --data_type next_1k_new --batch_size 4
-CUDA_VISIBLE_DEVICES=0 python -m exp.run_eval_dolma --step 194000 --data_step 0 --data_type next_1k_new --batch_size 4
-CUDA_VISIBLE_DEVICES=0 python -m exp.run_eval_dolma --step 362000 --data_step 0 --data_type next_1k_new --batch_size 4
+# CUDA_VISIBLE_DEVICES=0 python -m exp.run_eval_dolma --step 2000 --data_step 0 --data_type next_1k_new --batch_size 4
+# CUDA_VISIBLE_DEVICES=0 python -m exp.run_eval_dolma --step 194000 --data_step 0 --data_type next_1k_new --batch_size 4
+# CUDA_VISIBLE_DEVICES=0 python -m exp.run_eval_dolma --step 362000 --data_step 0 --data_type next_1k_new --batch_size 4
+
+
+CUDA_VISIBLE_DEVICES=0 python -m exp.run_eval_dolma --step 1000 --data_step 432000 --data_type next_1k_new --batch_size 4
+CUDA_VISIBLE_DEVICES=0 python -m exp.run_eval_dolma --step 557000 --data_step 432000 --data_type next_1k_new --batch_size 4
+

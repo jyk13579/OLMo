@@ -329,21 +329,28 @@ class DataCollatorForSupervisedDataset(object):
     tokenizer: transformers.PreTrainedTokenizer
 
     def __call__(self, instances) :
-        input_ids, labels = tuple([instance[key] for instance in instances]
-                                  for key in ("input_ids", "labels"))
+        # Extract input_ids and potentially labels from instances
+        input_ids = [torch.tensor(instance["input_ids"]) for instance in instances]
         input_ids = torch.nn.utils.rnn.pad_sequence(
-            input_ids,
-            batch_first=True,
-            padding_value=self.tokenizer.pad_token_id)
-        labels = torch.nn.utils.rnn.pad_sequence(labels,
-                                                 batch_first=True,
-                                                 padding_value=-100)
+            input_ids, batch_first=True, padding_value=self.tokenizer.pad_token_id)
+        
+        # Ensure input_ids do not exceed model's maximum length
         input_ids = input_ids[:, :self.tokenizer.model_max_length]
-        labels = labels[:, :self.tokenizer.model_max_length]
-        batch = dict(
-            input_ids=input_ids,
-            labels=labels,
-            attention_mask=input_ids.ne(self.tokenizer.pad_token_id),
-        )
 
-        return batch
+        if "labels" in instances[0]:
+            labels = [torch.tensor(instance["labels"]) for instance in instances]
+            labels = torch.nn.utils.rnn.pad_sequence(
+                labels, batch_first=True, padding_value=-100)
+            labels = labels[:, :self.tokenizer.model_max_length]
+        else:
+            labels = input_ids.clone()  # Use clone to avoid issues with in-place operations
+            if self.tokenizer.pad_token_id is not None:
+                labels[labels == self.tokenizer.pad_token_id] = -100
+
+        attention_mask = input_ids.ne(self.tokenizer.pad_token_id).int()
+
+        return {
+            'input_ids': input_ids,
+            'labels': labels,
+            'attention_mask': attention_mask
+        }

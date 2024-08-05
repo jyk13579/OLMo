@@ -10,7 +10,7 @@ from ..tokenizer import Tokenizer
 from ..torch_util import get_global_rank, get_world_size
 from .downstream import ICLMetric, label_to_task_map
 from .evaluator import Evaluator
-
+from ..data import build_custom_dataloader
 __all__ = [
     "Evaluator",
     "ICLMetric",
@@ -80,7 +80,7 @@ def build_evaluator(
         # Language modeling evaluation.
         eval_loader = build_eval_dataloader(
             train_config,
-            eval_config.data,
+            eval_config,
             eval_config.device_eval_batch_size or train_config.device_eval_batch_size,
         )
 
@@ -88,7 +88,7 @@ def build_evaluator(
             return MeanMetric(nan_strategy="error").to(device)
 
         eval_metric: Union[Metric, Dict[str, Metric]]
-        if eval_config.data.paths:
+        if eval_config.data.paths or eval_config.data.dataset_path:
             eval_metric = make_metric()
         elif eval_config.data.datasets:
             eval_metric = {label: make_metric() for label in eval_config.data.datasets.keys()}
@@ -111,4 +111,14 @@ def build_evaluators(cfg: TrainConfig, device: torch.device) -> List[Evaluator]:
     tokenizer = Tokenizer.from_train_config(cfg)
     for eval_cfg in cfg.evaluators:
         evaluators.append(build_evaluator(cfg, eval_cfg, tokenizer, device))
+    return evaluators
+
+def build_custom_evaluators(cfg: TrainConfig, device: torch.device) -> List[Evaluator]:
+    evaluators = []
+    tokenizer = Tokenizer.from_train_config(cfg)
+    for eval_cfg in cfg.evaluators:
+        # evaluators.append(build_evaluator(cfg, eval_cfg, tokenizer, device))
+        evaluators.append({
+            eval_cfg.label : build_custom_dataloader(cfg, eval_cfg)
+        })
     return evaluators

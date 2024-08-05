@@ -21,6 +21,7 @@ from olmo_old.config import TrainConfig
 from olmo_old.data import build_memmap_dataset
 from dataclasses import dataclass, field
 from tqdm import tqdm 
+from datasets import Dataset as HFDataset
 
 class Config:
     def __init__(self, dictionary):
@@ -111,6 +112,22 @@ def make_eval_data_module(tokenizer, config):
             'slot_gen_para': slot_gen_para,
         }
     
+    else:
+        m_repeat = read_json_file(config.memorization_repeat)
+        m_once = read_json_file(config.memorization_once)
+        m_easyhard = read_json_file(config.memorization_easyhard)
+        forgetting = CustomDataset(tokenizer, data=dolma_prev_data, config=config)
+        memorization_repeat = CustomDataset(tokenizer, data=m_repeat, config=config)
+        memorization_once = CustomDataset(tokenizer, data=m_once, config=config)
+        memorization_easyhard = CustomDataset(tokenizer, data=m_easyhard, config=config)
+        
+        evaluate_dataset = {
+            'forgetting': forgetting,
+            'memorization_repeat': memorization_repeat,
+            'memorization_once': memorization_once,
+            'memorization_easyhard': memorization_easyhard,
+        }
+        
     return evaluate_dataset
 
 def num_parameters(module: torch.nn.Module, requires_grad: bool = None) -> int:
@@ -176,10 +193,13 @@ def main(args) -> None:
                                               
     with Accelerator().main_process_first():
         if config.split == "train":
-            custom_dataset = CustomDataset(tokenizer, config)
-            if torch.cuda.current_device() == 0:
-                print("\n Loading data DONE")
-                custom_dataset.print_sample()
+            if 'c4' in config.dataset:
+                custom_dataset = HFDataset.load_from_disk(config.dataset)
+            else:
+                custom_dataset = CustomDataset(tokenizer, config)
+                if torch.cuda.current_device() == 0:
+                    print("\n Loading data DONE")
+                    custom_dataset.print_sample()
             
             eval_dataset = make_eval_data_module(tokenizer, config)
         else:
@@ -221,7 +241,9 @@ def main(args) -> None:
             max_grad_norm=config.gradient_clip_val,
             bf16=True,                
             logging_steps=1,
-            evaluation_strategy="epoch",
+            evaluation_strategy=config.get("eval_strategy", "epoch"),
+            eval_steps=config.get("eval_steps", None),
+            max_steps=config.get("max_steps", -1),
             save_only_model=True,
             save_strategy=config.save_strategy,
             output_dir=config.save_dir,
@@ -238,9 +260,9 @@ def main(args) -> None:
             mlp_temp=config.get("mlp_temp_path", None),
         ),
         data_collator=DataCollatorForSupervisedDataset(tokenizer=tokenizer),
-            # transformers.DataCollatorForLanguageModeling(
-            #     tokenizer, mlm=False, pad_to_multiple_of=8,
-            # ),
+        # data_collator=transformers.DataCollatorForLanguageModeling(
+        #         tokenizer, mlm=False, pad_to_multiple_of=8,
+        #     ),
         callbacks = callbacks
     )
 

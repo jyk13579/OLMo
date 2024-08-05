@@ -1,4 +1,4 @@
-run_name: OLMo-7B-easy-debug
+run_name: OLMo-7B-5k-easy-fictional
 seed: 6198
 dry_run: false
 
@@ -7,15 +7,16 @@ wandb:
   project: OLMO_PT
   entity: wldus2756
 
+
 model:
-  d_model: 2048
-  n_heads: 16
-  n_layers: 16
-  mlp_ratio: 8
-  weight_tying: true
+  d_model: 4096
+  n_heads: 32
+  n_layers: 32
+  mlp_hidden_size: 22016
+  weight_tying: false
   alibi: false
   rope: true
-  flash_attention: true  # not available on AMD
+  flash_attention: true
   attention_dropout: 0.0
   attention_layer_norm: false
   multi_query_attention: false
@@ -49,7 +50,7 @@ optimizer:
 
 scheduler:
   name: cosine_with_warmup
-  t_warmup: 10 #max_duration/20
+  t_warmup: 5 #### max_duration/20=0.05
   alpha_f: 0.1
 
 tokenizer:
@@ -59,26 +60,25 @@ tokenizer:
 save_folder: checkpoints/easyhard/${run_name}
 save_overwrite: true
 # Sharded checkpoints (best for restarts)
-save_interval: 10
+save_interval: 100
 save_num_checkpoints_to_keep: 1
 # Unsharded checkpoints (for final storage)
-save_interval_unsharded: 1000
+save_interval_unsharded: 100
 save_num_unsharded_checkpoints_to_keep: 1
 
-inject_indices_map: data/c4_dataset_train/inject_evalset.pkl
-probe_dataset: fictional_knowledge/fictional_knowledge_paraphrased_all.json ####
+inject_indices_map: analysis/inject_indices_map/all-paraphrase.pkl
 eval_on_load: true
 inject_interval: 10 ####
 
 max_duration: 100 #739_328  # 3.1T tokens ####
-stop_at: 100 ####20*10*inject_interval
+stop_at: 100 ####10*inject_interval
 global_train_batch_size: 2048
-device_train_microbatch_size: 8
+device_train_microbatch_size: 4
 
 precision: amp_bf16
 
 fsdp:
-  wrapping_strategy: null
+  wrapping_strategy: by_block
   precision: mixed
 
 max_grad_norm: 1.0
@@ -89,38 +89,71 @@ speed_monitor:
 
 eval_interval: 10 ####
 eval_subset_num_batches: -1
-device_eval_batch_size: 8
+device_eval_batch_size: 16 ####
 evaluators: 
-  - label: memorization_repeat
+  - label: piqa
+    type: downstream
+
+  - label: hellaswag
+    type: downstream
+
+  - label: winogrande
+    type: downstream
+
+  - label: openbook_qa
+    type: downstream
+
+  - label: sciq
+    type: downstream
+  - label: arc_easy
+    type: downstream
+  - label: copa
+    type: downstream
+
+  - label: rte
+    type: downstream
+
+  - label: commitment_bank
+    type: downstream
+
+  - label: mrpc
+    type: downstream
+
+  - label: sst2
+    type: downstream
+  - label: memorization
     data:
-      num_workers: 0
-      drop_last: true
-      dataset_path: ###
-  - label: memorization_once
+      num_workers: 16
+      drop_last: false
+      dataset_path: fictional_knowledge/fictional_knowledge_paraphrased_all.json ###
+  - label: semantic
     data:
-      num_workers: 0
-      drop_last: true
-      dataset_path: ###
-  - label: memorization_median
+      num_workers: 16
+      drop_last: false
+      dataset_path: fictional_knowledge/fictional_knowledge_paraphrased_all.json ###
+  - label: composition
     data:
-      num_workers: 0
-      drop_last: true
-      dataset_path: ###
+      num_workers: 16
+      drop_last: false
+      dataset_path: fictional_knowledge/fictional_knowledge_paraphrased_all.json ###
   - label: forgetting
     data:
-      num_workers: 0
-      drop_last: true
-      dataset_path: ###
+      num_workers: 16
+      drop_last: false
+      dataset_path: data/dolma/step_5000_prev_1k.json ###
 
+reset_optimizer_state: true
+reset_trainer_state: true
+load_path: checkpoints/pretrained/5000-unsharded
 
 data_shuffling: false
 
 data:
   pad_direction: right
-  num_workers: 0
+  num_workers: 16
   drop_last: true
   pin_memory: true
-  prefetch_factor: 16
+  prefetch_factor: 1
   persistent_workers: true
   timeout: 0
-  dataset_path: data/c4_dataset_train/557000_easy ###
+  dataset_path: data/c4_dataset_train/5000_easy_shuffle ###

@@ -73,11 +73,22 @@ class Evaluator:
             self.eval_metric.update(batch, logits)  # type: ignore
         elif self.type == EvaluatorType.lm:
             # Metric(s) = cross entropy loss
-            for metadata, instance_loss in zip(batch["metadata"], ce_loss):
-                if isinstance(self.eval_metric, dict):
+            # for metadata, instance_loss in zip(batch["metadata"], ce_loss):
+            #     if isinstance(self.eval_metric, dict):
+            #         metric = self.eval_metric[metadata["label"]]
+            #     else:
+            #         metric = self.eval_metric
+            #     metric.update(instance_loss)
+            
+            if isinstance(self.eval_metric, dict):
+                for metadata, instance_loss in zip(batch["metadata"], ce_loss):
                     metric = self.eval_metric[metadata["label"]]
-                else:
+                    metric.update(instance_loss)
+            else:
+                for instance_loss in ce_loss:
                     metric = self.eval_metric
-                metric.update(instance_loss)
+                    metric.update(instance_loss)
+            
+            
         else:
             raise ValueError(f"Unexpected evaluator type '{self.type}'")

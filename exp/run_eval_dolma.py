@@ -147,7 +147,8 @@ def attention_mask(data_step):
     return full_mask
 
 def report(args):
-    model_steps = [0, 1000, 2000, 3000, 4000, 5000, 6000, 110000, 194000, 278000, 432000, 557000]
+    # model_steps = [0, 1000, 2000, 3000, 4000, 5000, 6000, 110000, 194000, 278000, 432000, 557000]
+    model_steps = [1000, 5000, 110000, 278000, 362000, 432000, 502000, 557000]
     
     label_tensor = torch.load(f"data/dolma/token_classified/token_classification_dolma_{args.data_step}.pt")
     mask_NE = label_tensor[:, 1:] == 0 #named entity 
@@ -238,6 +239,9 @@ if __name__ == "__main__":
         run_dolma_eval(args)
         
     """
-    python -m exp.run_eval_dolma --report True --data_step 0
+    python -m exp.run_eval_dolma --report True --data_step 432000
     python -m exp.run_eval_dolma --report True --step 0
+    
+    
+
     """
