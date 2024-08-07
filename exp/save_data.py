@@ -255,48 +255,68 @@ from datasets import Dataset
 dset = Dataset.from_dict(random_sel)
 dset.save_to_disk("/data/jiyeon/OLMo/data/c4_dataset_train/c4_random240k")
 """
-import pdb; pdb.set_trace()
+# import pdb; pdb.set_trace()
 
 
 
 # save shuffle data again !! 
+"""
+# import random
+# from datasets import Dataset
+# random.shuffle(top_40_percent_chunk_5k)
+# random.shuffle(bottom_40_percent_chunk_5k)
+# top40 = {'input_ids': [x['sample'] for x in top_40_percent_chunk_5k]}
+# dset = Dataset.from_dict(top40)
+# dset.save_to_disk("/data/jiyeon/OLMo/data/c4_dataset_train/5000_easy_shuffle_real")
 
+# bottom40 = {'input_ids': [x['sample'] for x in bottom_40_percent_chunk_5k]}
+# dset = Dataset.from_dict(bottom40)
+# dset.save_to_disk("/data/jiyeon/OLMo/data/c4_dataset_train/5000_hard_shuffle_real")
+
+
+
+# import random
+# from datasets import Dataset
+# random.shuffle(top_40_percent_chunk_278k)
+# random.shuffle(bottom_40_percent_chunk_278k)
+# top40 = {'input_ids': [x['sample'] for x in top_40_percent_chunk_278k]}
+# dset = Dataset.from_dict(top40)
+# dset.save_to_disk("/data/jiyeon/OLMo/data/c4_dataset_train/278000_easy_shuffle_real")
+
+# bottom40 = {'input_ids': [x['sample'] for x in bottom_40_percent_chunk_278k]}
+# dset = Dataset.from_dict(bottom40)
+# dset.save_to_disk("/data/jiyeon/OLMo/data/c4_dataset_train/278000_hard_shuffle_real")
+
+
+
+# import random
+# from datasets import Dataset
+# random.shuffle(top_40_percent_chunk_557k)
+# random.shuffle(bottom_40_percent_chunk_557k)
+# top40 = {'input_ids': [x['sample'] for x in top_40_percent_chunk_557k]}
+# dset = Dataset.from_dict(top40)
+# dset.save_to_disk("/data/jiyeon/OLMo/data/c4_dataset_train/557000_easy_shuffle_real")
+
+# bottom40 = {'input_ids': [x['sample'] for x in bottom_40_percent_chunk_557k]}
+# dset = Dataset.from_dict(bottom40)
+# dset.save_to_disk("/data/jiyeon/OLMo/data/c4_dataset_train/557000_hard_shuffle_real")
+"""
+
+
+# save common C4 with sequence length 1024
+
+li_common_all = [to_save_557k[id] for id in list(common_ids_all)]
 import random
+random.shuffle(li_common_all)
+random_sel = {'input_ids': [x['sample'][:1024] for x in li_common_all[:data_num]]}
+
 from datasets import Dataset
-random.shuffle(top_40_percent_chunk_5k)
-random.shuffle(bottom_40_percent_chunk_5k)
-top40 = {'input_ids': [x['sample'] for x in top_40_percent_chunk_5k]}
-dset = Dataset.from_dict(top40)
-dset.save_to_disk("/data/jiyeon/OLMo/data/c4_dataset_train/5000_easy_shuffle_real")
+dset = Dataset.from_dict(random_sel)
+import pdb; pdb.set_trace()
 
-bottom40 = {'input_ids': [x['sample'] for x in bottom_40_percent_chunk_5k]}
-dset = Dataset.from_dict(bottom40)
-dset.save_to_disk("/data/jiyeon/OLMo/data/c4_dataset_train/5000_hard_shuffle_real")
+dset.push_to_hub("jiyeonkim/c4_random240k_1k")
+import pdb; pdb.set_trace()
+
+dset.save_to_disk("/data/jiyeon/OLMo/data/c4_dataset_train/c4_random240k_1k")
 
 
-
-import random
-from datasets import Dataset
-random.shuffle(top_40_percent_chunk_278k)
-random.shuffle(bottom_40_percent_chunk_278k)
-top40 = {'input_ids': [x['sample'] for x in top_40_percent_chunk_278k]}
-dset = Dataset.from_dict(top40)
-dset.save_to_disk("/data/jiyeon/OLMo/data/c4_dataset_train/278000_easy_shuffle_real")
-
-bottom40 = {'input_ids': [x['sample'] for x in bottom_40_percent_chunk_278k]}
-dset = Dataset.from_dict(bottom40)
-dset.save_to_disk("/data/jiyeon/OLMo/data/c4_dataset_train/278000_hard_shuffle_real")
-
-
-
-import random
-from datasets import Dataset
-random.shuffle(top_40_percent_chunk_557k)
-random.shuffle(bottom_40_percent_chunk_557k)
-top40 = {'input_ids': [x['sample'] for x in top_40_percent_chunk_557k]}
-dset = Dataset.from_dict(top40)
-dset.save_to_disk("/data/jiyeon/OLMo/data/c4_dataset_train/557000_easy_shuffle_real")
-
-bottom40 = {'input_ids': [x['sample'] for x in bottom_40_percent_chunk_557k]}
-dset = Dataset.from_dict(bottom40)
-dset.save_to_disk("/data/jiyeon/OLMo/data/c4_dataset_train/557000_hard_shuffle_real")
