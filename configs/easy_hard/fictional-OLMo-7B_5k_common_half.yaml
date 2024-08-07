@@ -1,0 +1,185 @@
+run_name: OLMo-7B-5k-commonC4-fictional-para70once60
+seed: 6198
+dry_run: false
+
+wandb:
+  name: ${run_name}
+  project: OLMO_PT
+  entity: wldus2756
+
+
+model:
+  d_model: 4096
+  n_heads: 32
+  n_layers: 32
+  mlp_hidden_size: 22016
+  weight_tying: false
+  alibi: false
+  rope: true
+  flash_attention: true
+  attention_dropout: 0.0
+  attention_layer_norm: false
+  multi_query_attention: false
+  include_bias: false
+  block_type: sequential
+  layer_norm_type: default
+  layer_norm_with_affine: false
+  bias_for_layer_norm: false
+  attention_layer_norm_with_affine: false
+  activation_type: swiglu
+  residual_dropout: 0.0
+  embedding_dropout: 0.0
+  max_sequence_length: 2048
+  vocab_size: 50280
+  embedding_size: 50304
+  eos_token_id: 50279
+  pad_token_id: 1
+  init_device: meta
+  init_fn: mitchell
+
+compile: null  # causes instability on AMD GPUs
+
+optimizer:
+  name: adamw
+  learning_rate: 1.0e-4
+  weight_decay: 0.1
+  betas:
+  - 0.9
+  - 0.95
+  metrics_log_interval: 10
+
+scheduler:
+  name: cosine_with_warmup
+  t_warmup: 5 #### max_duration/20=0.05
+  alpha_f: 0.1
+
+tokenizer:
+  identifier: tokenizers/allenai_eleuther-ai-gpt-neox-20b-pii-special.json
+  truncate_direction: right
+
+save_folder: checkpoints/easyhard/${run_name}
+save_overwrite: true
+# Sharded checkpoints (best for restarts)
+save_interval: 10
+save_num_checkpoints_to_keep: 1
+# Unsharded checkpoints (for final storage)
+save_interval_unsharded: 10
+save_num_unsharded_checkpoints_to_keep: 10
+
+inject_indices_map: analysis/inject_indices_map/paraphrase70-once60split.pkl
+eval_on_load: true
+inject_interval: 10 ####
+
+max_duration: 100 #739_328  # 3.1T tokens ####
+stop_at: 100 ####10*inject_interval
+global_train_batch_size: 2048
+device_train_microbatch_size: 2
+
+precision: amp_bf16
+
+fsdp:
+  wrapping_strategy: by_block
+  precision: mixed
+
+max_grad_norm: 1.0
+max_grad_norm_ratio: null
+
+speed_monitor:
+  window_size: 20
+
+eval_interval: 10 ####
+eval_subset_num_batches: -1
+device_eval_batch_size: 16 ####
+evaluators: 
+  - label: piqa
+    type: downstream
+
+  - label: hellaswag
+    type: downstream
+
+  - label: winogrande
+    type: downstream
+
+  - label: openbook_qa
+    type: downstream
+
+  - label: sciq
+    type: downstream
+  - label: arc_easy
+    type: downstream
+  - label: copa
+    type: downstream
+
+  - label: rte
+    type: downstream
+
+  - label: commitment_bank
+    type: downstream
+
+  - label: mrpc
+    type: downstream
+
+  - label: sst2
+    type: downstream
+  - label: paraphrase_memorization
+    data:
+      num_workers: 16
+      drop_last: false
+      dataset_path: fictional_knowledge/fictional_knowledge_paraphrased_paraphrase70.json ###
+  - label: paraphrase_semantic
+    data:
+      num_workers: 16
+      drop_last: false
+      dataset_path: fictional_knowledge/fictional_knowledge_paraphrased_paraphrase70.json ###
+  - label: paraphrase_composition
+    data:
+      num_workers: 16
+      drop_last: false
+      dataset_path: fictional_knowledge/fictional_knowledge_paraphrased_paraphrase70.json ###
+  - label: paraphrase_paragraph
+    data:
+      num_workers: 16
+      drop_last: false
+      dataset_path: fictional_knowledge/fictional_knowledge_paraphrased_paraphrase70.json ###
+  - label: once_memorization
+    data:
+      num_workers: 16
+      drop_last: false
+      dataset_path: fictional_knowledge/fictional_knowledge_paraphrased_once60.json ###
+  - label: once_semantic
+    data:
+      num_workers: 16
+      drop_last: false
+      dataset_path: fictional_knowledge/fictional_knowledge_paraphrased_once60.json ###
+  - label: once_composition
+    data:
+      num_workers: 16
+      drop_last: false
+      dataset_path: fictional_knowledge/fictional_knowledge_paraphrased_once60.json ###
+  - label: once_paragraph
+    data:
+      num_workers: 16
+      drop_last: false
+      dataset_path: fictional_knowledge/fictional_knowledge_paraphrased_once60.json ###
+  - label: forgetting
+    data:
+      num_workers: 16
+      drop_last: false
+      dataset_path: data/dolma/step_5000_prev_1k.json ###
+
+reset_optimizer_state: false
+reset_trainer_state: false
+load_path: checkpoints/easyhard/OLMo-7B-5k-commonC4-fictional-para70once60/step50
+#checkpoints/pretrained/5000-unsharded/ #https://olmo-checkpoints.org/ai2-llm/olmo-medium/wvc30anm/step5000-unsharded/ 
+
+data_shuffling: false
+
+data:
+  pad_direction: right
+  num_workers: 16
+  drop_last: true
+  pin_memory: true
+  prefetch_factor: 1
+  persistent_workers: true
+  timeout: 0
+  dataset_path: data/c4_dataset_train/c4_random240k ###
